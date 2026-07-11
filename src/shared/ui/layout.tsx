@@ -12,7 +12,8 @@ type LayoutElement =
   | "aside"
   | "header"
   | "footer"
-  | "nav";
+  | "nav"
+  | "span";
 
 type DividerElement = "div" | "hr";
 
@@ -85,6 +86,21 @@ const marginBlockClasses = {
   64: "my-64",
   80: "my-80",
   96: "my-96"
+} as const satisfies Record<SpacingToken, string>;
+
+const marginInlineClasses = {
+  4: "mx-4",
+  8: "mx-8",
+  12: "mx-12",
+  16: "mx-16",
+  20: "mx-20",
+  24: "mx-24",
+  32: "mx-32",
+  40: "mx-40",
+  48: "mx-48",
+  64: "mx-64",
+  80: "mx-80",
+  96: "mx-96"
 } as const satisfies Record<SpacingToken, string>;
 
 const widthClasses = {
@@ -334,10 +350,24 @@ export function Divider({
     className: cn(
       "shrink-0 border-border",
       orientation === "horizontal" ? "w-full border-t" : "self-stretch border-l",
-      orientation === "horizontal" && marginBlockClasses[spacing],
+      orientation === "horizontal" ? marginBlockClasses[spacing] : marginInlineClasses[spacing],
       className
     )
   });
+}
+
+type SeparatorProps = Omit<DividerProps, "as">;
+
+export function Separator({ orientation = "horizontal", spacing = 24, className, ...props }: SeparatorProps) {
+  return <Divider as="hr" orientation={orientation} spacing={spacing} className={className} {...props} />;
+}
+
+export function HorizontalDivider({ spacing = 24, className, ...props }: Omit<DividerProps, "orientation">) {
+  return <Divider orientation="horizontal" spacing={spacing} className={className} {...props} />;
+}
+
+export function VerticalDivider({ spacing = 24, className, ...props }: Omit<DividerProps, "orientation">) {
+  return <Divider orientation="vertical" spacing={spacing} className={className} {...props} />;
 }
 
 type CenterProps = LayoutBaseProps & {

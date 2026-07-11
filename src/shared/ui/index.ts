@@ -12,6 +12,10 @@ export * from "./textarea";
 export * from "./theme-provider";
 export * from "./typography";
 export * from "./types";
+export * from "./card";
+export * from "./badge";
+export * from "./avatar";
+export * from "./loader";
 
 export type { InputProps, InputSize, InputState, InputVariant } from "./input";
 export type { TextareaProps, TextareaSize, TextareaState, TextareaVariant } from "./textarea";
