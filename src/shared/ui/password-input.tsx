@@ -3,7 +3,6 @@ import {
   useState,
   type InputHTMLAttributes,
   type ReactNode,
-  type Ref
 } from "react";
 
 import { cn } from "./cn";
@@ -29,10 +28,10 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
       hiddenIcon,
       disabled = false,
       readonly = false,
-      variant,
-      size,
-      state,
-      loading,
+      variant: _variant,
+      size:  _size,
+      state: _state,
+      loading: _loading,
       ...props
     },
     ref

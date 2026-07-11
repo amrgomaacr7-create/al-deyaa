@@ -1,7 +1,6 @@
 import {
   forwardRef,
   type ReactNode,
-  type Ref
 } from "react";
 
 import { Input, type InputProps } from "./input";

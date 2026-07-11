@@ -2,11 +2,10 @@ import {
   forwardRef,
   type InputHTMLAttributes,
   type ReactNode,
-  type Ref
 } from "react";
 
 import { cn } from "./cn";
-import type { ColorScheme, ComponentSize } from "./types";
+import type { ComponentSize } from "./types";
 
 export type InputSize = ComponentSize | "icon";
 export type InputVariant = "solid" | "soft" | "outline" | "ghost";

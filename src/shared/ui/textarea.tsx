@@ -1,7 +1,6 @@
 import {
   forwardRef,
   type TextareaHTMLAttributes,
-  type Ref
 } from "react";
 
 import { cn } from "./cn";
