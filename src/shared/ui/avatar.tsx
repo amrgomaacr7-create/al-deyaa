@@ -1,5 +1,6 @@
-import { createContext, forwardRef, useContext, useMemo, useState, type HTMLAttributes, type ImgHTMLAttributes, type ReactNode, type SyntheticEvent } from "react";
+"use client";
 
+import { createContext, forwardRef, useContext, useMemo, useState, type HTMLAttributes, type ImgHTMLAttributes, type ReactNode, type SyntheticEvent } from "react";
 import { cn } from "./cn";
 import { Inline } from "./layout";
 import { Body } from "./typography";

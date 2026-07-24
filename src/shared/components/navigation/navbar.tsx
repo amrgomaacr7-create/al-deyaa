@@ -51,7 +51,7 @@ export function Navbar() {
         >
           {navigationItems.map((item) => (
             <Link
-              key={item.href}
+              key={`${item.label}-${item.href}`}
               href={item.href as Route}
               className="text-sm font-medium text-text-soft transition-colors duration-fast hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             >
@@ -116,7 +116,7 @@ export function Navbar() {
           <div className="flex flex-col gap-8">
             {navigationItems.map((item) => (
               <Link
-                key={item.href}
+                key={`${item.label}-${item.href}`}
                 href={item.href as Route}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="rounded-medium px-12 py-8 text-sm font-medium text-text transition-colors duration-fast hover:bg-background-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
