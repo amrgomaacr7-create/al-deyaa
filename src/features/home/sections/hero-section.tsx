@@ -29,22 +29,22 @@ export function HeroSection() {
               بثقة.
             </p>
 
-          <div className="flex flex-wrap gap-12">
-            <Link
-              href="/"
-              className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors duration-fast hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              ابدأ رحلتك التعليمية
-            </Link>
-          
-            <Link
-              href="/"
-              className="inline-flex h-48 items-center justify-center rounded-medium border border-border bg-transparent px-24 text-sm font-semibold text-text transition-colors duration-fast hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              استكشف الكورسات
-            </Link>
-          </div>
-          
+            <div className="flex flex-wrap gap-12">
+              <Link
+                href="/"
+                className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors duration-fast hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                ابدأ رحلتك التعليمية
+              </Link>
+
+              <Link
+                href="/"
+                className="inline-flex h-48 items-center justify-center rounded-medium border border-border bg-transparent px-24 text-sm font-semibold text-text transition-colors duration-fast hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                استكشف الكورسات
+              </Link>
+            </div>
+
             <div className="flex flex-wrap gap-24 pt-16">
               <div>
                 <p className="text-2xl font-bold text-text">+10</p>
