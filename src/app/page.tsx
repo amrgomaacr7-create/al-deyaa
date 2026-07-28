@@ -1,4 +1,5 @@
 import {
+  CoursesSection,
   HeroSection,
   TeacherIntroSection,
 } from "@/features/home";
@@ -6,8 +7,11 @@ import {
 export default function HomePage() {
   return (
     <>
-      <HeroSection />
-      <TeacherIntroSection />
+<>
+     <HeroSection />
+     <TeacherIntroSection />
+     <CoursesSection />
+</>
     </>
   );
 }
