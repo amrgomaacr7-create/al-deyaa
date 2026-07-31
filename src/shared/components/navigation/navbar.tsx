@@ -6,12 +6,13 @@ import { Menu, Moon, Sun, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button, cn } from "@/shared/ui";
+import { AuthNav } from "@/features/auth";
 
 const navigationItems = [
   { label: "الرئيسية", href: "/" },
-  { label: "الكورسات", href: "/" },
-  { label: "عن المدرس", href: "/" },
-  { label: "تواصل معنا", href: "/" }
+  { label: "الكورسات", href: "/courses" },
+  { label: "عن المدرس", href: "/#teacher" },
+  { label: "تواصل معنا", href: "/#contact" },
 ];
 
 export function Navbar() {
@@ -45,8 +46,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav
-          className="hidden items-center gap-24 md:flex"
+        <nav className="flex items-center gap-24 "
           aria-label="التنقل الرئيسي"
         >
           {navigationItems.map((item) => (
@@ -72,13 +72,7 @@ export function Navbar() {
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </Button>
 
-          <Button variant="ghost" size="sm">
-            تسجيل الدخول
-          </Button>
-
-          <Button variant="primary" size="sm">
-            إنشاء حساب
-          </Button>
+          <AuthNav />
         </div>
 
         {/* Mobile Actions */}
@@ -125,15 +119,9 @@ export function Navbar() {
               </Link>
             ))}
 
-            <div className="mt-8 flex flex-col gap-8 border-t border-border pt-16">
-              <Button variant="ghost" size="md">
-                تسجيل الدخول
-              </Button>
-
-              <Button variant="primary" size="md">
-                إنشاء حساب
-              </Button>
-            </div>
+            <div className="mt-8 border-t border-border pt-16">
+  <AuthNav />
+</div>
           </div>
         </nav>
       )}

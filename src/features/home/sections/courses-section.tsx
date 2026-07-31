@@ -70,12 +70,12 @@ export function CoursesSection() {
                     {course.level}
                   </p>
                 </Stack>
-
-                <Link
-                  href="/"
-                  className="mt-24 inline-flex h-48 items-center justify-center rounded-medium border border-border px-20 text-sm font-semibold text-text transition-colors duration-fast hover:bg-surface"
+               
+               <Link
+                 href="/courses"
+                 className="mt-24 inline-flex h-48 items-center justify-center rounded-medium border border-border bg-transparent px-20 text-sm font-semibold text-text transition-colors duration-fast hover:bg-surface"
                 >
-                  استكشف المسار
+                 استكشف المسار
                 </Link>
               </article>
             ))}
