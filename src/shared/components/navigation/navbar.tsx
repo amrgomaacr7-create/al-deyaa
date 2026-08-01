@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
-import { useTheme } from "@/shared/ui/theme-provider";
 import { Button, cn } from "@/shared/ui";
 import { AuthNav } from "@/features/auth";
 
@@ -18,14 +17,6 @@ const navigationItems = [
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const { resolvedTheme, setTheme } = useTheme();
-
-  const isDarkMode = resolvedTheme === "dark";
-
-  const toggleTheme = () => {
-    setTheme(isDarkMode ? "light" : "dark");
-  };
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((current) => !current);
@@ -67,49 +58,11 @@ export function Navbar() {
 
         {/* Desktop Actions */}
         <div className="hidden items-center gap-12 md:flex">
-          {/* Theme Toggle */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label={
-              isDarkMode
-                ? "تفعيل الوضع الفاتح"
-                : "تفعيل الوضع الداكن"
-            }
-            aria-pressed={isDarkMode}
-          >
-            {isDarkMode ? (
-              <Sun size={18} />
-            ) : (
-              <Moon size={18} />
-            )}
-          </Button>
-
           <AuthNav />
         </div>
 
         {/* Mobile Actions */}
         <div className="flex items-center gap-8 md:hidden">
-          {/* Theme Toggle Mobile */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label={
-              isDarkMode
-                ? "تفعيل الوضع الفاتح"
-                : "تفعيل الوضع الداكن"
-            }
-            aria-pressed={isDarkMode}
-          >
-            {isDarkMode ? (
-              <Sun size={18} />
-            ) : (
-              <Moon size={18} />
-            )}
-          </Button>
-
           {/* Mobile Menu */}
           <Button
             variant="outline"
