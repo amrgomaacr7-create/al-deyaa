@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { Menu, Moon, Sun, X } from "lucide-react";
 import { useState } from "react";
 
+import { useTheme } from "@/shared/ui/theme-provider";
 import { Button, cn } from "@/shared/ui";
 import { AuthNav } from "@/features/auth";
 
@@ -17,10 +18,13 @@ const navigationItems = [
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const isDarkMode = resolvedTheme === "dark";
 
   const toggleTheme = () => {
-    setIsDarkMode((current) => !current);
+    setTheme(isDarkMode ? "light" : "dark");
   };
 
   const toggleMobileMenu = () => {
@@ -46,7 +50,8 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="flex items-center gap-24 "
+        <nav
+          className="flex items-center gap-24"
           aria-label="التنقل الرئيسي"
         >
           {navigationItems.map((item) => (
@@ -62,14 +67,23 @@ export function Navbar() {
 
         {/* Desktop Actions */}
         <div className="hidden items-center gap-12 md:flex">
+          {/* Theme Toggle */}
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={toggleTheme}
-            aria-label={isDarkMode ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+            aria-label={
+              isDarkMode
+                ? "تفعيل الوضع الفاتح"
+                : "تفعيل الوضع الداكن"
+            }
             aria-pressed={isDarkMode}
           >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            {isDarkMode ? (
+              <Sun size={18} />
+            ) : (
+              <Moon size={18} />
+            )}
           </Button>
 
           <AuthNav />
@@ -77,25 +91,43 @@ export function Navbar() {
 
         {/* Mobile Actions */}
         <div className="flex items-center gap-8 md:hidden">
+          {/* Theme Toggle Mobile */}
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={toggleTheme}
-            aria-label={isDarkMode ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+            aria-label={
+              isDarkMode
+                ? "تفعيل الوضع الفاتح"
+                : "تفعيل الوضع الداكن"
+            }
             aria-pressed={isDarkMode}
           >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            {isDarkMode ? (
+              <Sun size={18} />
+            ) : (
+              <Moon size={18} />
+            )}
           </Button>
 
+          {/* Mobile Menu */}
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={toggleMobileMenu}
-            aria-label={isMobileMenuOpen ? "إغلاق القائمة" : "فتح القائمة"}
+            aria-label={
+              isMobileMenuOpen
+                ? "إغلاق القائمة"
+                : "فتح القائمة"
+            }
             aria-expanded={isMobileMenuOpen}
             aria-controls="mobile-navigation"
           >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            {isMobileMenuOpen ? (
+              <X size={20} />
+            ) : (
+              <Menu size={20} />
+            )}
           </Button>
         </div>
       </div>
@@ -120,8 +152,8 @@ export function Navbar() {
             ))}
 
             <div className="mt-8 border-t border-border pt-16">
-  <AuthNav />
-</div>
+              <AuthNav />
+            </div>
           </div>
         </nav>
       )}

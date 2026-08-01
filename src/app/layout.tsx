@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import "@/styles/globals.css";
 
 import Navbar from "@/shared/components/navigation/navbar";
+import { ThemeProvider } from "@/shared/ui/theme-provider";
 
 export const metadata: Metadata = {
   title: "Al-Deyaa",
@@ -18,10 +19,12 @@ export default function RootLayout({
   children,
 }: RootLayoutProps) {
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body>
-        <Navbar />
-        {children}
+        <ThemeProvider defaultTheme="light">
+          <Navbar />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
