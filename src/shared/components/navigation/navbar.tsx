@@ -22,6 +22,10 @@ export function Navbar() {
     setIsMobileMenuOpen((current) => !current);
   };
 
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <header
       className={cn(
@@ -30,11 +34,16 @@ export function Navbar() {
         "supports-[backdrop-filter]:bg-background/80"
       )}
     >
-      <div className="mx-auto flex min-h-72 max-w-[1280px] items-center justify-between px-16 md:px-24">
+      <div className="mx-auto flex min-h-64 max-w-[1280px] items-center justify-between px-16 md:px-24">
         {/* Logo */}
         <Link
           href="/"
-          className="text-xl font-bold text-text transition-colors duration-fast hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          className={cn(
+            "shrink-0 text-xl font-bold text-text",
+            "transition-colors duration-fast hover:text-primary",
+            "focus-visible:outline-none focus-visible:ring-2",
+            "focus-visible:ring-focus-ring"
+          )}
           aria-label="الضياء - الصفحة الرئيسية"
         >
           الضياء
@@ -42,14 +51,19 @@ export function Navbar() {
 
         {/* Desktop Navigation */}
         <nav
-          className="flex items-center gap-24"
+          className="hidden items-center gap-20 md:flex"
           aria-label="التنقل الرئيسي"
         >
           {navigationItems.map((item) => (
             <Link
               key={`${item.label}-${item.href}`}
               href={item.href as Route}
-              className="text-sm font-medium text-text-soft transition-colors duration-fast hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              className={cn(
+                "relative text-sm font-medium text-text-soft",
+                "transition-colors duration-fast hover:text-primary",
+                "focus-visible:outline-none focus-visible:ring-2",
+                "focus-visible:ring-focus-ring"
+              )}
             >
               {item.label}
             </Link>
@@ -57,13 +71,12 @@ export function Navbar() {
         </nav>
 
         {/* Desktop Actions */}
-        <div className="hidden items-center gap-12 md:flex">
+        <div className="hidden shrink-0 items-center md:flex">
           <AuthNav />
         </div>
 
-        {/* Mobile Actions */}
-        <div className="flex items-center gap-8 md:hidden">
-          {/* Mobile Menu */}
+        {/* Mobile Menu Button */}
+        <div className="flex md:hidden">
           <Button
             variant="outline"
             size="icon"
@@ -89,7 +102,10 @@ export function Navbar() {
       {isMobileMenuOpen && (
         <nav
           id="mobile-navigation"
-          className="border-t border-border bg-background px-16 py-16 md:hidden"
+          className={cn(
+            "border-t border-border bg-background px-16 py-16",
+            "md:hidden"
+          )}
           aria-label="التنقل على الهاتف"
         >
           <div className="flex flex-col gap-8">
@@ -97,8 +113,15 @@ export function Navbar() {
               <Link
                 key={`${item.label}-${item.href}`}
                 href={item.href as Route}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="rounded-medium px-12 py-8 text-sm font-medium text-text transition-colors duration-fast hover:bg-background-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                onClick={closeMobileMenu}
+                className={cn(
+                  "rounded-medium px-12 py-8",
+                  "text-sm font-medium text-text",
+                  "transition-colors duration-fast",
+                  "hover:bg-background-elevated hover:text-primary",
+                  "focus-visible:outline-none focus-visible:ring-2",
+                  "focus-visible:ring-focus-ring"
+                )}
               >
                 {item.label}
               </Link>

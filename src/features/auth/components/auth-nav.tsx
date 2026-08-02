@@ -26,9 +26,6 @@ export function AuthNav() {
           error,
         } = await supabase.auth.getUser();
 
-        console.log("Auth user:", user);
-        console.log("Auth error:", error);
-
         if (error) {
           setUser(null);
         } else {
@@ -48,11 +45,9 @@ export function AuthNav() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        console.log("Auth state changed:", session?.user);
-
         setUser(session?.user ?? null);
         setLoading(false);
-      },
+      }
     );
 
     return () => {
@@ -63,44 +58,91 @@ export function AuthNav() {
   async function handleLogout() {
     const supabase = createClient();
 
-    await supabase.auth.signOut();
-
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   }
 
+  /*
+   * Loading State
+   * نفس شكل أزرار الـ Auth النهائية
+   * لتجنب تغيير شكل الـ Navbar أثناء التحميل
+   */
   if (loading) {
     return (
       <div className="flex items-center gap-12">
-        <Link
-          href="/login"
-          className="inline-flex h-44 items-center justify-center rounded-medium border-2 border-red-500 bg-white px-20 text-sm font-bold text-black"
-        >
-          تسجيل الدخول
-        </Link>
+        <div
+          className="h-44 w-112 animate-pulse rounded-medium border border-border bg-surface"
+          aria-hidden="true"
+        />
 
-        <Link
-          href="/register"
-          className="inline-flex h-44 items-center justify-center rounded-medium bg-yellow-400 px-20 text-sm font-bold text-black"
-        >
-          إنشاء حساب
-        </Link>
+        <div
+          className="h-44 w-112 animate-pulse rounded-medium bg-primary/40"
+          aria-hidden="true"
+        />
       </div>
     );
   }
 
+  /*
+   * Guest User
+   * المستخدم غير مسجل الدخول
+   */
   if (!user) {
     return (
       <div className="flex items-center gap-12">
+        {/* Login */}
         <Link
           href="/login"
-          className="inline-flex h-44 items-center justify-center rounded-medium border border-border px-20 text-sm font-semibold text-text transition-colors hover:bg-surface"
+          className="
+            inline-flex
+            h-44
+            items-center
+            justify-center
+            rounded-medium
+            border
+            border-primary
+            bg-transparent
+            px-20
+            text-sm
+            font-semibold
+            text-primary
+            transition-all
+            duration-fast
+            hover:bg-primary
+            hover:text-primary-foreground
+            focus-visible:outline-none
+            focus-visible:ring-2
+            focus-visible:ring-focus-ring
+          "
         >
           تسجيل الدخول
         </Link>
 
+        {/* Register */}
         <Link
           href="/register"
-          className="inline-flex h-44 items-center justify-center rounded-medium bg-primary px-20 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+          className="
+            inline-flex
+            h-44
+            items-center
+            justify-center
+            rounded-medium
+            bg-primary
+            px-20
+            text-sm
+            font-semibold
+            text-primary-foreground
+            transition-all
+            duration-fast
+            hover:bg-primary-hover
+            focus-visible:outline-none
+            focus-visible:ring-2
+            focus-visible:ring-focus-ring
+          "
         >
           إنشاء حساب
         </Link>
@@ -108,6 +150,9 @@ export function AuthNav() {
     );
   }
 
+  /*
+   * Logged-in User
+   */
   const name =
     user.user_metadata?.full_name ||
     user.email ||
@@ -115,17 +160,42 @@ export function AuthNav() {
 
   return (
     <div className="flex items-center gap-12">
+      {/* User Welcome */}
       <span className="text-sm font-semibold text-text">
         مرحبًا، {name}
       </span>
 
+      {/* Logout */}
       <button
         type="button"
         onClick={handleLogout}
-        className="inline-flex h-44 items-center justify-center rounded-medium border border-border px-20 text-sm font-semibold text-text transition-colors hover:bg-surface"
+        className="
+          inline-flex
+          h-44
+          items-center
+          justify-center
+          rounded-medium
+          border
+          border-border
+          bg-transparent
+          px-20
+          text-sm
+          font-semibold
+          text-text
+          transition-all
+          duration-fast
+          hover:border-danger
+          hover:bg-danger
+          hover:text-white
+          focus-visible:outline-none
+          focus-visible:ring-2
+          focus-visible:ring-focus-ring
+        "
       >
         تسجيل الخروج
       </button>
     </div>
   );
 }
+
+export default AuthNav;

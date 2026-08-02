@@ -89,7 +89,9 @@ const progressLessons = courseLessons.map((lesson) => ({
     <main className="min-h-screen bg-background py-64">
       <Container size="desktop">
         <Stack gap={48}>
-          <CourseProgress lessons={progressLessons} />
+          <CourseProgress
+  lessons={progressLessons}
+/>
 
           <Link
             href="/courses"
