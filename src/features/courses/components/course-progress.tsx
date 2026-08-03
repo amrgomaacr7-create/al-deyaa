@@ -38,30 +38,28 @@ export function CourseProgress({
 
     const { data, error: progressError } = await supabase
       .from("lesson_progress")
-      .select("lesson_id")
+      .select("lesson_id, completed")
       .eq("student_id", user.id)
       .eq("completed", true);
 
     if (progressError) {
-      console.error("Failed to load course progress:", {
-        message: progressError.message,
-        details: progressError.details,
-        hint: progressError.hint,
-        code: progressError.code,
-      });
+      console.error(
+        "Failed to load course progress:",
+        progressError,
+      );
 
-      setError("حدث خطأ أثناء تحميل تقدمك.");
+      setError("حدث خطأ أثناء تحميل تقدم الكورس.");
       setLoading(false);
       return;
     }
 
-    const lessonIds = new Set(lessons.map((lesson) => lesson.id));
-
-    const completed = (data ?? [])
+    const completedIds = (data ?? [])
       .map((item) => item.lesson_id)
-      .filter((lessonId) => lessonIds.has(lessonId));
+      .filter((lessonId) =>
+        lessons.some((lesson) => lesson.id === lessonId),
+      );
 
-    setCompletedLessons(completed);
+    setCompletedLessons(completedIds);
     setLoading(false);
   }, [lessons]);
 
@@ -93,16 +91,6 @@ export function CourseProgress({
       ? Math.round((completedCount / totalLessons) * 100)
       : 0;
 
-  if (loading) {
-    return (
-      <div className="rounded-2xl border border-border bg-surface p-24">
-        <p className="text-sm text-text-soft">
-          جاري تحميل تقدمك...
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-2xl border border-border bg-surface p-24">
       <div className="flex items-center justify-between gap-16">
@@ -112,7 +100,9 @@ export function CourseProgress({
           </p>
 
           <p className="mt-8 text-lg font-bold text-text">
-            {completedCount} من {totalLessons} دروس مكتملة
+            {loading
+              ? "جاري تحميل التقدم..."
+              : `${completedCount} من ${totalLessons} دروس مكتملة`}
           </p>
         </div>
 

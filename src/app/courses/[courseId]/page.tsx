@@ -79,19 +79,17 @@ export default async function CourseDetailsPage({
 
   const courseLessons: Lesson[] = lessons ?? [];
 
-const progressLessons = courseLessons.map((lesson) => ({
-  id: lesson.id,
-  title: lesson.title,
-  order: lesson.lesson_order,
-}));
+  const progressLessons = courseLessons.map((lesson) => ({
+    id: lesson.id,
+    title: lesson.title,
+    order: lesson.lesson_order,
+  }));
 
   return (
     <main className="min-h-screen bg-background py-64">
       <Container size="desktop">
         <Stack gap={48}>
-          <CourseProgress
-  lessons={progressLessons}
-/>
+          <CourseProgress lessons={progressLessons} />
 
           <Link
             href="/courses"
