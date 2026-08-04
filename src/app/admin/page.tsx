@@ -1,10 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { Container, Stack } from "@/shared/ui";
 
-export default async function AdminPage() {
+type AdminPageProps = {
+  searchParams: Promise<{
+    error?: string;
+  }>;
+};
+
+export default async function AdminPage({
+  searchParams,
+}: AdminPageProps) {
   const supabase = await createClient();
+
+  const params = await searchParams;
 
   const {
     data: { user },
@@ -35,7 +46,10 @@ export default async function AdminPage() {
     .maybeSingle();
 
   if (profileError) {
-    console.error("Failed to load admin profile:", profileError);
+    console.error(
+      "Failed to load admin profile:",
+      profileError,
+    );
   }
 
   if (!profile?.is_admin) {
@@ -56,15 +70,167 @@ export default async function AdminPage() {
     );
   }
 
-  const { data: courses, error: coursesError } = await supabase
-    .from("courses")
-    .select(
-      "id, title, description, level, category, is_published, created_at",
-    )
-    .order("created_at", { ascending: false });
+  /*
+   * تغيير حالة الكورس
+   * منشور <-> مخفي
+   */
+  async function toggleCoursePublish(
+    formData: FormData,
+  ) {
+    "use server";
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile?.is_admin) {
+      redirect("/");
+    }
+
+    const courseId = String(
+      formData.get("course_id") ?? "",
+    );
+
+    const currentStatus =
+      formData.get("is_published") === "true";
+
+    if (!courseId) {
+      redirect("/admin");
+    }
+
+    const { error } = await supabase
+      .from("courses")
+      .update({
+        is_published: !currentStatus,
+      })
+      .eq("id", courseId);
+
+    if (error) {
+      console.error(
+        "Failed to toggle course publish status:",
+        error,
+      );
+
+      redirect(
+        `/admin?error=${encodeURIComponent(
+          "حدث خطأ أثناء تغيير حالة الكورس.",
+        )}`,
+      );
+    }
+
+    redirect("/admin");
+  }
+
+  /*
+   * حذف الكورس
+   */
+  async function deleteCourse(
+    formData: FormData,
+  ) {
+    "use server";
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile?.is_admin) {
+      redirect("/");
+    }
+
+    const courseId = String(
+      formData.get("course_id") ?? "",
+    );
+
+    if (!courseId) {
+      redirect("/admin");
+    }
+
+    /*
+     * نحذف الدروس المرتبطة بالكورس أولًا.
+     * ده مهم لو قاعدة البيانات مش عاملة
+     * ON DELETE CASCADE.
+     */
+    const { error: lessonsError } = await supabase
+      .from("lessons")
+      .delete()
+      .eq("course_id", courseId);
+
+    if (lessonsError) {
+      console.error(
+        "Failed to delete course lessons:",
+        lessonsError,
+      );
+
+      redirect(
+        `/admin?error=${encodeURIComponent(
+          "حدث خطأ أثناء حذف دروس الكورس.",
+        )}`,
+      );
+    }
+
+    /*
+     * بعد حذف الدروس نحذف الكورس نفسه.
+     */
+    const { error: courseError } = await supabase
+      .from("courses")
+      .delete()
+      .eq("id", courseId);
+
+    if (courseError) {
+      console.error(
+        "Failed to delete course:",
+        courseError,
+      );
+
+      redirect(
+        `/admin?error=${encodeURIComponent(
+          "حدث خطأ أثناء حذف الكورس.",
+        )}`,
+      );
+    }
+
+    redirect("/admin");
+  }
+
+  const { data: courses, error: coursesError } =
+    await supabase
+      .from("courses")
+      .select(
+        "id, title, description, level, category, is_published, created_at",
+      )
+      .order("created_at", {
+        ascending: false,
+      });
 
   if (coursesError) {
-    console.error("Failed to load admin courses:", coursesError);
+    console.error(
+      "Failed to load admin courses:",
+      coursesError,
+    );
   }
 
   const adminCourses = courses ?? [];
@@ -88,6 +254,15 @@ export default async function AdminPage() {
             </p>
           </div>
 
+          {/* Error Message */}
+          {params.error && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-20">
+              <p className="text-sm font-semibold text-red-500">
+                {params.error}
+              </p>
+            </div>
+          )}
+
           {/* Stats */}
           <div className="grid gap-16 sm:grid-cols-3">
             <div className="rounded-2xl border border-border bg-surface p-24">
@@ -106,9 +281,11 @@ export default async function AdminPage() {
               </p>
 
               <p className="mt-8 text-3xl font-bold text-primary">
-                {adminCourses.filter(
-                  (course) => course.is_published,
-                ).length}
+                {
+                  adminCourses.filter(
+                    (course) => course.is_published,
+                  ).length
+                }
               </p>
             </div>
 
@@ -118,9 +295,11 @@ export default async function AdminPage() {
               </p>
 
               <p className="mt-8 text-3xl font-bold text-text">
-                {adminCourses.filter(
-                  (course) => !course.is_published,
-                ).length}
+                {
+                  adminCourses.filter(
+                    (course) => !course.is_published,
+                  ).length
+                }
               </p>
             </div>
           </div>
@@ -139,11 +318,11 @@ export default async function AdminPage() {
               </div>
 
               <Link
-  href="/admin/courses/new"
-  className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
->
-  + إضافة كورس جديد
-</Link>
+                href="/admin/courses/new"
+                className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+              >
+                + إضافة كورس جديد
+              </Link>
             </div>
 
             <div className="mt-24 grid gap-16">
@@ -164,6 +343,7 @@ export default async function AdminPage() {
                     className="rounded-xl border border-border bg-background p-20"
                   >
                     <div className="flex flex-col gap-20 lg:flex-row lg:items-center lg:justify-between">
+                      {/* Course Info */}
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-8">
                           <h3 className="text-lg font-bold text-text">
@@ -190,36 +370,78 @@ export default async function AdminPage() {
 
                         <div className="mt-12 flex flex-wrap gap-12 text-xs text-text-soft">
                           <span>
-                            المستوى: {course.level || "غير محدد"}
+                            المستوى:{" "}
+                            {course.level || "غير محدد"}
                           </span>
 
                           <span>
-                            التصنيف: {course.category || "غير محدد"}
+                            التصنيف:{" "}
+                            {course.category || "غير محدد"}
                           </span>
                         </div>
                       </div>
 
+                      {/* Actions */}
                       <div className="flex flex-wrap gap-8">
-                        <button
-                          type="button"
+                        {/* إدارة الدروس */}
+                        <Link
+                          href={`/admin/courses/${course.id}/lessons`}
                           className="inline-flex h-44 items-center justify-center rounded-medium border border-border px-16 text-sm font-semibold text-text transition-colors hover:bg-surface"
                         >
                           إدارة الدروس
-                        </button>
+                        </Link>
 
-                        <button
-                          type="button"
+                        {/* تعديل */}
+                        <Link
+                          href={`/admin/courses/${course.id}/edit`}
                           className="inline-flex h-44 items-center justify-center rounded-medium border border-border px-16 text-sm font-semibold text-text transition-colors hover:bg-surface"
                         >
                           تعديل
-                        </button>
+                        </Link>
 
-                        <button
-                          type="button"
-                          className="inline-flex h-44 items-center justify-center rounded-medium border border-red-500/30 px-16 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
-                        >
-                          حذف
-                        </button>
+                        {/* نشر / إخفاء */}
+                        <form action={toggleCoursePublish}>
+                          <input
+                            type="hidden"
+                            name="course_id"
+                            value={course.id}
+                          />
+
+                          <input
+                            type="hidden"
+                            name="is_published"
+                            value={
+                              course.is_published
+                                ? "true"
+                                : "false"
+                            }
+                          />
+
+                          <button
+                            type="submit"
+                            className="inline-flex h-44 items-center justify-center rounded-medium border border-primary/30 px-16 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+                          >
+                            {course.is_published
+                              ? "إخفاء"
+                              : "نشر"}
+                          </button>
+                        </form>
+
+                        {/* حذف */}
+                        <form action={deleteCourse}>
+                          <input
+                            type="hidden"
+                            name="course_id"
+                            value={course.id}
+                          />
+
+                          <button
+                            type="submit"
+                            className="inline-flex h-44 items-center justify-center rounded-medium border border-red-500/30 px-16 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
+                          >
+                            حذف
+                          </button>
+                        </form>
                       </div>
                     </div>
                   </article>
@@ -228,7 +450,7 @@ export default async function AdminPage() {
             </div>
           </section>
 
-          {/* Admin info */}
+          {/* Admin Info */}
           <div className="rounded-2xl border border-border bg-surface p-24">
             <p className="text-sm text-text-soft">
               حساب المشرف الحالي

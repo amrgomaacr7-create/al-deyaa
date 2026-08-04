@@ -1,10 +1,20 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { Container, Stack } from "@/shared/ui";
 
-export default async function NewCoursePage() {
+type NewLessonPageProps = {
+  params: Promise<{
+    courseId: string;
+  }>;
+};
+
+export default async function NewLessonPage({
+  params,
+}: NewLessonPageProps) {
+  const { courseId } = await params;
+
   const supabase = await createClient();
 
   const {
@@ -15,21 +25,31 @@ export default async function NewCoursePage() {
     redirect("/login");
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("is_admin")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profileError) {
-    console.error("Failed to load admin profile:", profileError);
-  }
-
   if (!profile?.is_admin) {
     redirect("/");
   }
 
-  async function createCourse(formData: FormData) {
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id, title")
+    .eq("id", courseId)
+    .maybeSingle();
+
+  if (courseError) {
+    console.error("Failed to load course:", courseError);
+  }
+
+  if (!course) {
+    notFound();
+  }
+
+  async function createLesson(formData: FormData) {
     "use server";
 
     const supabase = await createClient();
@@ -42,70 +62,63 @@ export default async function NewCoursePage() {
       redirect("/login");
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
       .select("is_admin")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError) {
-      console.error("Failed to check admin profile:", {
-        message: profileError.message,
-        details: profileError.details,
-        hint: profileError.hint,
-        code: profileError.code,
-      });
-
-      throw new Error(
-        `حدث خطأ أثناء التحقق من صلاحيات المشرف: ${profileError.message}`,
-      );
-    }
-
     if (!profile?.is_admin) {
       redirect("/");
     }
 
-    const title = String(formData.get("title") ?? "").trim();
+    const title = String(
+      formData.get("title") ?? "",
+    ).trim();
 
     const description = String(
       formData.get("description") ?? "",
     ).trim();
 
-    const level = String(formData.get("level") ?? "").trim();
+    const lessonOrder = Number(
+      formData.get("lesson_order") ?? 1,
+    );
 
-    const category = String(
-      formData.get("category") ?? "",
+    const type = String(
+      formData.get("type") ?? "video",
     ).trim();
 
-    const slug = String(formData.get("slug") ?? "").trim();
-
-    const thumbnailUrl = String(
-      formData.get("thumbnail_url") ?? "",
+    const videoUrl = String(
+      formData.get("video_url") ?? "",
     ).trim();
 
     const isPublished =
       formData.get("is_published") === "on";
 
-    if (!title || !slug) {
+    if (!title) {
+      throw new Error("عنوان الدرس مطلوب.");
+    }
+
+    if (!Number.isInteger(lessonOrder) || lessonOrder < 1) {
       throw new Error(
-        "اسم الكورس والرابط المختصر مطلوبان.",
+        "ترتيب الدرس يجب أن يكون رقمًا صحيحًا يبدأ من 1.",
       );
     }
 
     const { error } = await supabase
-      .from("courses")
+      .from("lessons")
       .insert({
+        course_id: courseId,
         title,
         description: description || null,
-        level: level || null,
-        category: category || null,
-        slug,
-        thumbnail_url: thumbnailUrl || null,
+        lesson_order: lessonOrder,
+        type,
+        video_url: videoUrl || null,
         is_published: isPublished,
       });
 
     if (error) {
-      console.error("Failed to create course:", {
+      console.error("Failed to create lesson:", {
         message: error.message,
         details: error.details,
         hint: error.hint,
@@ -113,11 +126,11 @@ export default async function NewCoursePage() {
       });
 
       throw new Error(
-        `حدث خطأ أثناء إنشاء الكورس: ${error.message}`,
+        `حدث خطأ أثناء إنشاء الدرس: ${error.message}`,
       );
     }
 
-    redirect("/admin");
+    redirect(`/admin/courses/${courseId}/lessons`);
   }
 
   return (
@@ -125,10 +138,10 @@ export default async function NewCoursePage() {
       <Container size="desktop">
         <Stack gap={32}>
           <Link
-            href="/admin"
+            href={`/admin/courses/${courseId}/lessons`}
             className="w-fit text-sm font-semibold text-primary"
           >
-            ← العودة إلى لوحة التحكم
+            ← العودة إلى دروس الكورس
           </Link>
 
           <div>
@@ -137,16 +150,20 @@ export default async function NewCoursePage() {
             </p>
 
             <h1 className="mt-12 text-4xl font-bold text-text">
-              إضافة كورس جديد
+              إضافة درس جديد
             </h1>
 
             <p className="mt-16 text-lg text-text-soft">
-              أضف البيانات الأساسية للكورس الجديد.
+              إضافة درس جديد إلى كورس:
+              {" "}
+              <span className="font-semibold text-primary">
+                {course.title}
+              </span>
             </p>
           </div>
 
           <form
-            action={createCourse}
+            action={createLesson}
             className="rounded-2xl border border-border bg-surface p-24 sm:p-32"
           >
             <Stack gap={24}>
@@ -155,7 +172,7 @@ export default async function NewCoursePage() {
                   htmlFor="title"
                   className="text-sm font-semibold text-text"
                 >
-                  اسم الكورس
+                  عنوان الدرس
                 </label>
 
                 <input
@@ -163,7 +180,7 @@ export default async function NewCoursePage() {
                   name="title"
                   type="text"
                   required
-                  placeholder="مثال: النحو العربي"
+                  placeholder="مثال: المبتدأ والخبر"
                   className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
                 />
               </div>
@@ -173,14 +190,14 @@ export default async function NewCoursePage() {
                   htmlFor="description"
                   className="text-sm font-semibold text-text"
                 >
-                  وصف الكورس
+                  وصف الدرس
                 </label>
 
                 <textarea
                   id="description"
                   name="description"
                   rows={5}
-                  placeholder="اكتب وصفًا مختصرًا للكورس..."
+                  placeholder="اكتب وصفًا مختصرًا للدرس..."
                   className="mt-8 w-full rounded-medium border border-border bg-background p-16 text-sm leading-7 text-text outline-none transition-colors focus:border-primary"
                 />
               </div>
@@ -188,78 +205,72 @@ export default async function NewCoursePage() {
               <div className="grid gap-24 sm:grid-cols-2">
                 <div>
                   <label
-                    htmlFor="level"
+                    htmlFor="lesson_order"
                     className="text-sm font-semibold text-text"
                   >
-                    المستوى
+                    ترتيب الدرس
                   </label>
 
                   <input
-                    id="level"
-                    name="level"
-                    type="text"
-                    placeholder="مثال: الصف السادس الابتدائي"
+                    id="lesson_order"
+                    name="lesson_order"
+                    type="number"
+                    min="1"
+                    defaultValue="1"
+                    required
                     className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
                   />
                 </div>
 
                 <div>
                   <label
-                    htmlFor="category"
+                    htmlFor="type"
                     className="text-sm font-semibold text-text"
                   >
-                    التصنيف
+                    نوع الدرس
                   </label>
 
-                  <input
-                    id="category"
-                    name="category"
-                    type="text"
-                    placeholder="مثال: اللغة العربية"
+                  <select
+                    id="type"
+                    name="type"
+                    defaultValue="video"
                     className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
-                  />
+                  >
+                    <option value="video">
+                      فيديو
+                    </option>
+
+                    <option value="pdf">
+                      PDF
+                    </option>
+
+                    <option value="text">
+                      نص
+                    </option>
+                  </select>
                 </div>
               </div>
 
               <div>
                 <label
-                  htmlFor="slug"
+                  htmlFor="video_url"
                   className="text-sm font-semibold text-text"
                 >
-                  الرابط المختصر Slug
+                  رابط الفيديو
                 </label>
 
                 <input
-                  id="slug"
-                  name="slug"
-                  type="text"
-                  required
-                  placeholder="مثال: arabic-grade-6"
+                  id="video_url"
+                  name="video_url"
+                  type="url"
+                  placeholder="https://youtube.com/..."
                   dir="ltr"
                   className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
                 />
 
                 <p className="mt-8 text-xs text-text-soft">
-                  استخدم حروفًا إنجليزية صغيرة وأرقامًا وشرطة فقط.
+                  اتركه فارغًا إذا كان الدرس من نوع PDF أو نص.
                 </p>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="thumbnail_url"
-                  className="text-sm font-semibold text-text"
-                >
-                  رابط صورة الكورس
-                </label>
-
-                <input
-                  id="thumbnail_url"
-                  name="thumbnail_url"
-                  type="url"
-                  placeholder="https://example.com/image.jpg"
-                  dir="ltr"
-                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
-                />
               </div>
 
               <div className="flex items-center gap-12">
@@ -275,7 +286,7 @@ export default async function NewCoursePage() {
                   htmlFor="is_published"
                   className="text-sm font-semibold text-text"
                 >
-                  نشر الكورس للطلاب مباشرة
+                  نشر الدرس للطلاب مباشرة
                 </label>
               </div>
 
@@ -284,11 +295,11 @@ export default async function NewCoursePage() {
                   type="submit"
                   className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
                 >
-                  إنشاء الكورس
+                  إنشاء الدرس
                 </button>
 
                 <Link
-                  href="/admin"
+                  href={`/admin/courses/${courseId}/lessons`}
                   className="inline-flex h-48 items-center justify-center rounded-medium border border-border px-24 text-sm font-semibold text-text transition-colors hover:bg-background"
                 >
                   إلغاء
