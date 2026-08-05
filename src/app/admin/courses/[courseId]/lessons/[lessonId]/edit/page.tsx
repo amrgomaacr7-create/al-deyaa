@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -13,21 +14,30 @@ type EditLessonPageProps = {
 
 const LESSON_FILES_BUCKET = "lesson-files";
 
-function getFileExtension(fileName: string) {
-  const extension = fileName.split(".").pop()?.toLowerCase();
+const ALLOWED_VIDEO_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/quicktime",
+] as const;
+
+function getFileExtension(fileName: string): string {
+  const extension = fileName
+    .split(".")
+    .pop()
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
   return extension || "bin";
 }
 
-function isAllowedVideoType(file: File) {
-  return [
-    "video/mp4",
-    "video/webm",
-    "video/ogg",
-    "video/quicktime",
-  ].includes(file.type);
+function isAllowedVideoType(file: File): boolean {
+  return ALLOWED_VIDEO_TYPES.includes(
+    file.type as (typeof ALLOWED_VIDEO_TYPES)[number],
+  );
 }
 
-function isAllowedPdfType(file: File) {
+function isAllowedPdfType(file: File): boolean {
   return file.type === "application/pdf";
 }
 
@@ -37,21 +47,50 @@ function isFileProvided(
   return (
     file instanceof File &&
     file.size > 0 &&
-    file.name.length > 0
+    file.name.trim().length > 0
   );
+}
+
+async function removeStorageFile(
+  supabaseClient: Awaited<ReturnType<typeof createClient>>,
+  filePath: string | null,
+  label: string,
+): Promise<void> {
+  if (!filePath) {
+    return;
+  }
+
+  const { error } = await supabaseClient.storage
+    .from(LESSON_FILES_BUCKET)
+    .remove([filePath]);
+
+  if (error) {
+    console.error(`Failed to remove old ${label}:`, error);
+  }
+}
+
+function getStoragePublicUrl(
+  supabaseClient: Awaited<ReturnType<typeof createClient>>,
+  filePath: string | null,
+): string | null {
+  if (!filePath) {
+    return null;
+  }
+
+  const { data } = supabaseClient.storage
+    .from(LESSON_FILES_BUCKET)
+    .getPublicUrl(filePath);
+
+  return data.publicUrl || null;
 }
 
 export default async function EditLessonPage({
   params,
 }: EditLessonPageProps) {
   const { courseId, lessonId } = await params;
-
   const supabase = await createClient();
 
-  // ================================
-  // Authentication
-  // ================================
-
+  // 1. التحقق من المستخدم
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -60,550 +99,259 @@ export default async function EditLessonPage({
     redirect("/login");
   }
 
-  // ================================
-  // Admin Check
-  // ================================
-
-  const { data: profile, error: profileError } =
-    await supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("id", user.id)
-      .maybeSingle();
+  // 2. التحقق من صلاحيات الأدمن
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
 
   if (profileError) {
-    console.error(
-      "Failed to load admin profile:",
-      profileError,
-    );
+    console.error("Failed to load admin profile:", profileError);
   }
 
   if (!profile?.is_admin) {
     redirect("/");
   }
 
-  // ================================
-  // Load Course
-  // ================================
+  // 3. جلب بيانات الكورس
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id, title")
+    .eq("id", courseId)
+    .maybeSingle();
 
-  const { data: course, error: courseError } =
-    await supabase
-      .from("courses")
-      .select("id, title")
-      .eq("id", courseId)
-      .maybeSingle();
+  if (courseError) console.error("Failed to load course:", courseError);
+  if (!course) notFound();
 
-  if (courseError) {
-    console.error(
-      "Failed to load course:",
-      courseError,
-    );
-  }
+  // 4. جلب بيانات الدرس
+  const { data: lesson, error: lessonError } = await supabase
+    .from("lessons")
+    .select(`
+        id,
+        course_id,
+        title,
+        description,
+        lesson_order,
+        type,
+        video_url,
+        video_source,
+        video_file_path,
+        pdf_source,
+        pdf_url,
+        pdf_file_path,
+        is_published
+      `)
+    .eq("id", lessonId)
+    .eq("course_id", courseId)
+    .maybeSingle();
 
-  if (!course) {
-    notFound();
-  }
+  if (lessonError) console.error("Failed to load lesson:", lessonError);
+  if (!lesson) notFound();
 
-  // ================================
-  // Load Lesson
-  // ================================
+  const currentLesson = lesson;
 
-  const { data: lesson, error: lessonError } =
-    await supabase
-      .from("lessons")
-      .select(
-        `
-          id,
-          course_id,
-          title,
-          description,
-          lesson_order,
-          type,
-          video_url,
-          video_source,
-          video_file_path,
-          pdf_source,
-          pdf_url,
-          pdf_file_path,
-          is_published
-        `,
-      )
-      .eq("id", lessonId)
-      .eq("course_id", courseId)
-      .maybeSingle();
+  // جلب الروابط الحالية وعرضها
+  const existingVideoUrl = getStoragePublicUrl(supabase, currentLesson.video_file_path);
+  const existingPdfUrl = getStoragePublicUrl(supabase, currentLesson.pdf_file_path);
 
-  if (lessonError) {
-    console.error(
-      "Failed to load lesson:",
-      lessonError,
-    );
-  }
-
-  // مهم جدًا:
-  // بعد هذا الشرط TypeScript يعرف أن lesson موجود
-  if (!lesson) {
-  notFound();
-}
-
-const currentLesson = lesson;
-
-  // ================================
-  // Update Lesson
-  // ================================
-
+  // دالة الحفظ
   async function updateLesson(formData: FormData) {
     "use server";
+    // تعريف عميل جديد مخصص للـ Server Action
+    const supabaseAction = await createClient();
 
-    const supabase = await createClient();
+    const { data: { user } } = await supabaseAction.auth.getUser();
+    if (!user) redirect("/login");
 
-    // ================================
-    // Authentication
-    // ================================
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      redirect("/login");
-    }
-
-    // ================================
-    // Admin Check
-    // ================================
-
-    const { data: profile } = await supabase
+    const { data: adminProfile } = await supabaseAction
       .from("profiles")
       .select("is_admin")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!profile?.is_admin) {
-      redirect("/");
-    }
+    if (!adminProfile?.is_admin) redirect("/");
 
-    // ================================
-    // Basic Fields
-    // ================================
-
-    const title = String(
-      formData.get("title") ?? "",
-    ).trim();
-
-    const description = String(
-      formData.get("description") ?? "",
-    ).trim();
-
-    const lessonOrder = Number(
-      formData.get("lesson_order") ?? 1,
-    );
-
-    const type = String(
-      formData.get("type") ?? "video",
-    ).trim();
-
-    const videoSource = String(
-      formData.get("video_source") ?? "url",
-    ).trim();
-
-    const videoUrl = String(
-      formData.get("video_url") ?? "",
-    ).trim();
-
-    const pdfSource = String(
-      formData.get("pdf_source") ?? "url",
-    ).trim();
-
-    const pdfUrl = String(
-      formData.get("pdf_url") ?? "",
-    ).trim();
-
-    const isPublished =
-      formData.get("is_published") === "on";
+    // استخراج وتجهيز البيانات
+    const title = String(formData.get("title") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const lessonOrder = Number(formData.get("lesson_order") ?? 1);
+    const type = String(formData.get("type") ?? "video").trim();
+    const videoSource = String(formData.get("video_source") ?? "url").trim();
+    const videoUrl = String(formData.get("video_url") ?? "").trim();
+    const pdfSource = String(formData.get("pdf_source") ?? "url").trim();
+    const pdfUrl = String(formData.get("pdf_url") ?? "").trim();
+    const isPublished = formData.get("is_published") === "on";
 
     const videoFile = formData.get("video_file");
-
     const pdfFile = formData.get("pdf_file");
 
-    // ================================
-    // Validation
-    // ================================
-
-    if (!title) {
-      throw new Error("عنوان الدرس مطلوب.");
+    // التحقق من صحة البيانات
+ console.log("TYPE =", type);
+console.log("VIDEO SOURCE =", videoSource);
+console.log("PDF SOURCE =", pdfSource);
+    if (!title) throw new Error("عنوان الدرس مطلوب.");
+    if (!Number.isInteger(lessonOrder) || lessonOrder < 1) throw new Error("ترتيب الدرس يجب أن يكون رقمًا صحيحًا يبدأ من 1.");
+    if (!["video", "pdf", "text"].includes(type)) throw new Error("نوع الدرس غير صالح.");
+    if (type === "video" && !["url", "upload"].includes(videoSource)) throw new Error("مصدر الفيديو غير صالح.");
+    if (type === "pdf" && !["url", "upload"].includes(pdfSource)) throw new Error("مصدر ملف PDF غير صالح.");
+    if (type === "video" && videoSource === "url" && !videoUrl) throw new Error("يجب إدخال رابط الفيديو.");
+    if (type === "pdf" && pdfSource === "url" && !pdfUrl) throw new Error("يجب إدخال رابط ملف PDF.");
+    
+    if (videoSource === "upload" && isFileProvided(videoFile) && !isAllowedVideoType(videoFile)) {
+      throw new Error("نوع ملف الفيديو غير مدعوم. استخدم MP4 أو WebM أو OGG أو MOV.");
+    }
+    if (pdfSource === "upload" && isFileProvided(pdfFile) && !isAllowedPdfType(pdfFile)) {
+      throw new Error("يجب رفع ملف PDF فقط.");
     }
 
-    if (
-      !Number.isInteger(lessonOrder) ||
-      lessonOrder < 1
-    ) {
-      throw new Error(
-        "ترتيب الدرس يجب أن يكون رقمًا صحيحًا يبدأ من 1.",
-      );
-    }
+    // المتغيرات النهائية التي سيتم حفظها
+    let finalVideoUrl = currentLesson.video_url ?? "";
+    let finalVideoSource = currentLesson.video_source ?? "url";
+    let finalVideoFilePath = currentLesson.video_file_path ?? null;
 
-    if (
-      type === "video" &&
-      videoSource === "url" &&
-      !videoUrl
-    ) {
-      throw new Error(
-        "يجب إدخال رابط الفيديو.",
-      );
-    }
+    let finalPdfUrl = currentLesson.pdf_url ?? "";
+    let finalPdfSource = currentLesson.pdf_source ?? "url";
+    let finalPdfFilePath = currentLesson.pdf_file_path ?? null;
 
-    if (
-      type === "pdf" &&
-      pdfSource === "url" &&
-      !pdfUrl
-    ) {
-      throw new Error(
-        "يجب إدخال رابط ملف PDF.",
-      );
-    }
-
-    if (
-      videoSource === "upload" &&
-      isFileProvided(videoFile) &&
-      !isAllowedVideoType(videoFile)
-    ) {
-      throw new Error(
-        "نوع ملف الفيديو غير مدعوم. استخدم MP4 أو WebM أو OGG أو MOV.",
-      );
-    }
-
-    if (
-      pdfSource === "upload" &&
-      isFileProvided(pdfFile) &&
-      !isAllowedPdfType(pdfFile)
-    ) {
-      throw new Error(
-        "يجب رفع ملف PDF فقط.",
-      );
-    }
-
-    // ================================
-    // Initialize Final Values
-    // ================================
-
-    let finalVideoUrl =
-      currentLesson.video_url ?? "";
-
-    let finalVideoSource =
-      currentLesson.video_source ?? "url";
-
-    let finalVideoFilePath =
-     currentLesson.video_file_path ?? null;
-
-    let finalPdfUrl =
-     currentLesson.pdf_url ?? "";
-
-    let finalPdfSource =
-     currentLesson.pdf_source ?? "url";
-
-    let finalPdfFilePath =
-      currentLesson.pdf_file_path ?? null;
-
-    // ================================
-    // Video URL Mode
-    // ================================
-
-    if (
-      type === "video" &&
-      videoSource === "url"
-    ) {
-      finalVideoSource = "url";
-      finalVideoUrl = videoUrl;
-      finalVideoFilePath = null;
-
-      // حذف الفيديو القديم من Storage
-      if (currentLesson.video_file_path) {
-  const {
-    error: removeOldVideoError,
-  } = await supabase.storage
-    .from(LESSON_FILES_BUCKET)
-    .remove([
-      currentLesson.video_file_path,
-    ]);
-
-  if (removeOldVideoError) {
-    console.error(
-      "Failed to remove old video:",
-      removeOldVideoError,
-    );
-  }
-}
-    }
-
-    // ================================
-    // Video Upload Mode
-    // ================================
-
-    if (
-      type === "video" &&
-      videoSource === "upload"
-    ) {
-      finalVideoSource = "upload";
-
-      if (isFileProvided(videoFile)) {
-        const safeExtension =
-          getFileExtension(videoFile.name);
-
-        const videoPath =
-          `lessons/${lessonId}/video/${crypto.randomUUID()}.${safeExtension}`;
-
-        const {
-          error: uploadError,
-        } = await supabase.storage
-          .from(LESSON_FILES_BUCKET)
-          .upload(
-            videoPath,
-            videoFile,
-            {
-              cacheControl: "3600",
-              upsert: false,
-              contentType: videoFile.type,
-            },
-          );
-
-        if (uploadError) {
-          console.error(
-            "Failed to upload video:",
-            uploadError,
-          );
-
-          throw new Error(
-            `فشل رفع الفيديو: ${uploadError.message}`,
-          );
-        }
-
-        // حذف الفيديو القديم بعد نجاح الرفع
+    // --- معالجة الفيديو ---
+    if (type === "video") {
+      if (videoSource === "url") {
+        finalVideoSource = "url";
+        finalVideoUrl = videoUrl;
+        
+        // لو اخترت رابط خارجي بدل الملف المرفوع، يتم حذف الملف القديم
         if (currentLesson.video_file_path) {
-  const {
-    error: removeOldVideoError,
-  } = await supabase.storage
-    .from(LESSON_FILES_BUCKET)
-    .remove([
-      currentLesson.video_file_path,
-    ]);
-
-  if (removeOldVideoError) {
-    console.error(
-      "Failed to remove old video:",
-      removeOldVideoError,
-    );
-  }
-}
-
-        const {
-          data: publicVideoData,
-        } = supabase.storage
-          .from(LESSON_FILES_BUCKET)
-          .getPublicUrl(videoPath);
-
-        finalVideoFilePath =
-          videoPath;
-
-        finalVideoUrl =
-          publicVideoData.publicUrl;
-      }
-    }
-
-    // ================================
-    // PDF URL Mode
-    // ================================
-
-    if (
-      type === "pdf" &&
-      pdfSource === "url"
-    ) {
-      finalPdfSource = "url";
-      finalPdfUrl = pdfUrl;
-      finalPdfFilePath = null;
-
-      // حذف ملف PDF القديم
-      if (currentLesson.pdf_file_path) {
-  const {
-    error: removeOldPdfError,
-  } = await supabase.storage
-    .from(LESSON_FILES_BUCKET)
-    .remove([
-      currentLesson.pdf_file_path,
-    ]);
-
-  if (removeOldPdfError) {
-    console.error(
-      "Failed to remove old PDF:",
-      removeOldPdfError,
-    );
-  }
-}
-    }
-
-    // ================================
-    // PDF Upload Mode
-    // ================================
-
-    if (
-      type === "pdf" &&
-      pdfSource === "upload"
-    ) {
-      finalPdfSource = "upload";
-
-      if (isFileProvided(pdfFile)) {
-        const safeExtension =
-          getFileExtension(pdfFile.name);
-
-        const pdfPath =
-          `lessons/${lessonId}/pdf/${crypto.randomUUID()}.${safeExtension}`;
-
-        const {
-          error: uploadError,
-        } = await supabase.storage
-          .from(LESSON_FILES_BUCKET)
-          .upload(
-            pdfPath,
-            pdfFile,
-            {
-              cacheControl: "3600",
-              upsert: false,
-              contentType:
-                "application/pdf",
-            },
-          );
-
-        if (uploadError) {
-          console.error(
-            "Failed to upload PDF:",
-            uploadError,
-          );
-
-          throw new Error(
-            `فشل رفع ملف PDF: ${uploadError.message}`,
-          );
+          await removeStorageFile(supabaseAction, currentLesson.video_file_path, "video");
+          finalVideoFilePath = null;
         }
-
-        // حذف ملف PDF القديم بعد نجاح الرفع
-        if (currentLesson.pdf_file_path) {
-  const {
-    error: removeOldPdfError,
-  } = await supabase.storage
-    .from(LESSON_FILES_BUCKET)
-    .remove([
-      currentLesson.pdf_file_path,
-    ]);
-
-  if (removeOldPdfError) {
-    console.error(
-      "Failed to remove old PDF:",
-      removeOldPdfError,
-    );
-  }
-}
-
-        const {
-          data: publicPdfData,
-        } = supabase.storage
-          .from(LESSON_FILES_BUCKET)
-          .getPublicUrl(pdfPath);
-
-        finalPdfFilePath =
-          pdfPath;
-
-        finalPdfUrl =
-          publicPdfData.publicUrl;
       }
-    }
 
-    // ================================
-    // Clear Unused Content
-    // ================================
+      if (videoSource === "upload") {
+        finalVideoSource = "upload";
 
-    if (type !== "video") {
+        if (isFileProvided(videoFile)) {
+          const safeExtension = getFileExtension(videoFile.name);
+          const videoPath = `lessons/${lessonId}/video/${crypto.randomUUID()}.${safeExtension}`;
+
+          const { error: uploadError } = await supabaseAction.storage
+            .from(LESSON_FILES_BUCKET)
+            .upload(videoPath, videoFile, { cacheControl: "3600", upsert: false, contentType: videoFile.type });
+
+          if (uploadError) throw new Error(`فشل رفع الفيديو: ${uploadError.message}`);
+
+          // رفع فيديو جديد يستبدل القديم (يتم حذف القديم هنا)
+          if (currentLesson.video_file_path) {
+            await removeStorageFile(supabaseAction, currentLesson.video_file_path, "video");
+          }
+
+          const { data } = supabaseAction.storage.from(LESSON_FILES_BUCKET).getPublicUrl(videoPath);
+          finalVideoFilePath = videoPath;
+          finalVideoUrl = data.publicUrl;
+        }
+      }
+    } else {
+      // تنظيف الفيديو إذا تغير نوع الدرس (الخطوة 4 التي طلبتها)
       finalVideoUrl = "";
       finalVideoSource = "url";
+
+      if (currentLesson.video_file_path) {
+        await removeStorageFile(
+          supabaseAction, // استخدام supabaseAction هنا وليس supabase
+          currentLesson.video_file_path,
+          "video",
+        );
+      }
+
       finalVideoFilePath = null;
     }
 
-    if (type !== "pdf") {
+    // --- معالجة الـ PDF ---
+   console.log("TYPE =", type);
+console.log("PDF SOURCE =", pdfSource);
+    if (type === "pdf") {
+      if (pdfSource === "url") {
+        finalPdfSource = "url";
+        finalPdfUrl = pdfUrl;
+        
+        // لو اخترت رابط خارجي بدل الملف المرفوع، يتم حذف الملف القديم
+        if (currentLesson.pdf_file_path) {
+          await removeStorageFile(supabaseAction, currentLesson.pdf_file_path, "PDF");
+          finalPdfFilePath = null;
+        }
+      }
+
+      if (pdfSource === "upload") {
+        finalPdfSource = "upload";
+
+        console.log("PDF FILE =", pdfFile);
+console.log("HAS PDF =", isFileProvided(pdfFile));
+        if (isFileProvided(pdfFile)) {
+          const safeExtension = getFileExtension(pdfFile.name);
+          const pdfPath = `lessons/${lessonId}/pdf/${crypto.randomUUID()}.${safeExtension}`;
+
+          const { error: uploadError } = await supabaseAction.storage
+            .from(LESSON_FILES_BUCKET)
+            .upload(pdfPath, pdfFile, { cacheControl: "3600", upsert: false, contentType: "application/pdf" });
+
+          if (uploadError) throw new Error(`فشل رفع ملف PDF: ${uploadError.message}`);
+
+          // رفع PDF جديد يستبدل القديم (يتم حذف القديم هنا)
+          if (currentLesson.pdf_file_path) {
+            await removeStorageFile(supabaseAction, currentLesson.pdf_file_path, "PDF");
+          }
+
+          const { data } = supabaseAction.storage.from(LESSON_FILES_BUCKET).getPublicUrl(pdfPath);
+          finalPdfFilePath = pdfPath;
+          finalPdfUrl = data.publicUrl;
+        }
+      }
+    } else {
+      // تنظيف PDF إذا تغير نوع الدرس (الخطوة 5 التي طلبتها)
       finalPdfUrl = "";
       finalPdfSource = "url";
+
+      if (currentLesson.pdf_file_path) {
+        await removeStorageFile(
+          supabaseAction, // استخدام supabaseAction هنا وليس supabase
+          currentLesson.pdf_file_path,
+          "PDF",
+        );
+      }
+
       finalPdfFilePath = null;
     }
 
-    // ================================
-    // Update Database
-    // ================================
-
-    const {
-      error,
-    } = await supabase
+    // تحديث قاعدة البيانات
+    const { error: updateError } = await supabaseAction
       .from("lessons")
       .update({
         title,
-        description:
-          description || null,
-
-        lesson_order:
-          lessonOrder,
-
+        description: description || null,
+        lesson_order: lessonOrder,
         type,
-
-        video_url:
-          finalVideoUrl || null,
-
-        video_source:
-          finalVideoSource,
-
-        video_file_path:
-          finalVideoFilePath,
-
-        pdf_source:
-          finalPdfSource,
-
-        pdf_url:
-          finalPdfUrl || null,
-
-        pdf_file_path:
-          finalPdfFilePath,
-
-        is_published:
-          isPublished,
+        video_url: finalVideoUrl || null,
+        video_source: finalVideoSource,
+        video_file_path: finalVideoFilePath,
+        pdf_source: finalPdfSource,
+        pdf_url: finalPdfUrl || null,
+        pdf_file_path: finalPdfFilePath,
+        is_published: isPublished,
       })
       .eq("id", lessonId)
       .eq("course_id", courseId);
 
-    if (error) {
-      console.error(
-        "Failed to update lesson:",
-        {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        },
-      );
-
-      throw new Error(
-        `حدث خطأ أثناء تعديل الدرس: ${error.message}`,
-      );
+    if (updateError) {
+      throw new Error(`حدث خطأ أثناء تعديل الدرس: ${updateError.message}`);
     }
 
-    // ================================
-    // Redirect
-    // ================================
-
-    redirect(
-      `/admin/courses/${courseId}/lessons`,
-    );
+    redirect(`/admin/courses/${courseId}/lessons`);
   }
 
   return (
-    <main className="min-h-screen bg-background py-64">
+    <main dir="rtl" className="min-h-screen bg-background py-64">
       <Container size="desktop">
         <Stack gap={32}>
-
-          {/* Back */}
           <Link
             href={`/admin/courses/${courseId}/lessons`}
             className="w-fit text-sm font-semibold text-primary"
@@ -611,16 +359,13 @@ const currentLesson = lesson;
             ← العودة إلى دروس الكورس
           </Link>
 
-          {/* Header */}
           <div>
             <p className="text-sm font-semibold text-primary">
               لوحة تحكم الضياء
             </p>
-
             <h1 className="mt-12 text-4xl font-bold text-text">
               تعديل الدرس
             </h1>
-
             <p className="mt-16 text-lg text-text-soft">
               تعديل درس داخل كورس:{" "}
               <span className="font-semibold text-primary">
@@ -629,15 +374,11 @@ const currentLesson = lesson;
             </p>
           </div>
 
-          {/* Form */}
           <form
             action={updateLesson}
-            encType="multipart/form-data"
             className="rounded-2xl border border-border bg-surface p-24 sm:p-32"
           >
             <Stack gap={24}>
-
-              {/* Title */}
               <div>
                 <label
                   htmlFor="title"
@@ -645,18 +386,16 @@ const currentLesson = lesson;
                 >
                   عنوان الدرس
                 </label>
-
-                <input
+               <input 
                   id="title"
                   name="title"
                   type="text"
                   required
-                  defaultValue={lesson.title}
-                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
+                  defaultValue={currentLesson.title}
+                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
                 />
               </div>
 
-              {/* Description */}
               <div>
                 <label
                   htmlFor="description"
@@ -664,21 +403,16 @@ const currentLesson = lesson;
                 >
                   وصف الدرس
                 </label>
-
                 <textarea
                   id="description"
                   name="description"
                   rows={5}
-                  defaultValue={
-                    lesson.description ?? ""
-                  }
-                  className="mt-8 w-full rounded-medium border border-border bg-background p-16 text-sm leading-7 text-text outline-none transition-colors focus:border-primary"
+                  defaultValue={currentLesson.description ?? ""}
+                  className="mt-8 w-full rounded-medium border border-border bg-background p-16 text-sm leading-7 text-text outline-none focus:border-primary"
                 />
               </div>
 
-              {/* Order + Type */}
               <div className="grid gap-24 sm:grid-cols-2">
-
                 <div>
                   <label
                     htmlFor="lesson_order"
@@ -686,17 +420,14 @@ const currentLesson = lesson;
                   >
                     ترتيب الدرس
                   </label>
-
                   <input
                     id="lesson_order"
                     name="lesson_order"
                     type="number"
                     min="1"
                     required
-                    defaultValue={
-                      lesson.lesson_order
-                    }
-                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
+                    defaultValue={currentLesson.lesson_order}
+                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
                   />
                 </div>
 
@@ -707,207 +438,200 @@ const currentLesson = lesson;
                   >
                     نوع الدرس
                   </label>
-
                   <select
-                    id="type"
+                    id="type"   
                     name="type"
-                    defaultValue={
-                      lesson.type || "video"
-                    }
-                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
+                    defaultValue={currentLesson.type ?? "video"}
+                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
                   >
-                    <option value="video">
-                      فيديو
-                    </option>
+                    <option value="video">فيديو</option>
+                    <option value="pdf">PDF</option>
+                    <option value="text">نص</option>
+                  </select>
+                </div>
+              </div>
 
-                    <option value="pdf">
-                      PDF
-                    </option>
+              <div className="rounded-xl border border-border p-20">
+                <h2 className="text-lg font-bold text-text">إعدادات الفيديو</h2>
 
-                    <option value="text">
-                      نص
-                    </option>
+                {currentLesson.video_file_path && existingVideoUrl && (
+                  <div className="mt-20">
+                    <p className="mb-12 text-sm font-semibold text-primary">
+                      الفيديو المرفوع حاليًا
+                    </p>
+                    <video
+                      controls
+                      preload="metadata"
+                      className="w-full rounded-xl border border-border bg-black"
+                    >
+                      <source src={existingVideoUrl} />
+                      متصفحك لا يدعم تشغيل الفيديو.
+                    </video>
+                    <div className="mt-12 flex flex-wrap gap-12">
+                      <a
+                        href={existingVideoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-44 items-center justify-center rounded-medium bg-primary px-20 text-sm font-semibold text-primary-foreground"
+                      >
+                        فتح الفيديو
+                      </a>
+                      <span className="flex items-center text-xs text-text-soft">
+                        الملف: {currentLesson.video_file_path}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-20">
+                  <label
+                    htmlFor="video_source"
+                    className="text-sm font-semibold text-text"
+                  >
+                    مصدر الفيديو
+                  </label>
+                  <select
+                    id="video_source"
+                    name="video_source"
+                    defaultValue={currentLesson.video_source ?? "url"}
+                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
+                  >
+                    <option value="url">رابط فيديو</option>
+                    <option value="upload">رفع فيديو إلى المنصة</option>
                   </select>
                 </div>
 
-              </div>
+                <div className="mt-20">
+                  <label
+                    htmlFor="video_url"
+                    className="text-sm font-semibold text-text"
+                  >
+                    رابط الفيديو
+                  </label>
+                  <input
+                    id="video_url"
+                    name="video_url"
+                    type="url"
+                    defaultValue={currentLesson.video_url ?? ""}
+                    placeholder="https://example.com/video.mp4"
+                    dir="ltr"
+                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
+                  />
+                </div>
 
-              {/* Video Source */}
-              <div>
-                <label
-                  htmlFor="video_source"
-                  className="text-sm font-semibold text-text"
-                >
-                  مصدر الفيديو
-                </label>
-
-                <select
-                  id="video_source"
-                  name="video_source"
-                  defaultValue={
-                    lesson.video_source || "url"
-                  }
-                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
-                >
-                  <option value="url">
-                    رابط فيديو
-                  </option>
-
-                  <option value="upload">
-                    رفع فيديو إلى المنصة
-                  </option>
-                </select>
-              </div>
-
-              {/* Video URL */}
-              <div>
-                <label
-                  htmlFor="video_url"
-                  className="text-sm font-semibold text-text"
-                >
-                  رابط الفيديو
-                </label>
-
-                <input
-                  id="video_url"
-                  name="video_url"
-                  type="url"
-                  defaultValue={
-                    lesson.video_url ?? ""
-                  }
-                  placeholder="https://youtube.com/..."
-                  dir="ltr"
-                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
-                />
-
-                <p className="mt-8 text-xs text-text-soft">
-                  استخدم هذا الحقل إذا اخترت مصدر الفيديو: رابط فيديو.
-                </p>
-              </div>
-
-              {/* Video Upload */}
-              <div>
-                <label
-                  htmlFor="video_file"
-                  className="text-sm font-semibold text-text"
-                >
-                  رفع فيديو
-                </label>
-
-                <input
-                  id="video_file"
-                  name="video_file"
-                  type="file"
-                  accept="video/mp4,video/webm,video/ogg,video/quicktime"
-                  className="mt-8 block w-full rounded-medium border border-border bg-background p-12 text-sm text-text"
-                />
-
-                <p className="mt-8 text-xs text-text-soft">
-                  يمكنك رفع فيديو MP4 أو WebM أو OGG أو MOV.
-                  اتركه فارغًا للاحتفاظ بالفيديو الحالي.
-                </p>
-
-                {lesson.video_file_path && (
-                  <p className="mt-8 text-xs text-primary">
-                    يوجد فيديو مرفوع حاليًا لهذا الدرس.
+                <div className="mt-20">
+                  <label
+                    htmlFor="video_file"
+                    className="text-sm font-semibold text-text"
+                  >
+                    رفع فيديو جديد
+                  </label>
+                  <input
+                    id="video_file"
+                    name="video_file"
+                    type="file"
+                    accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                    className="mt-8 block w-full rounded-medium border border-border bg-background p-12 text-sm text-text"
+                  />
+                  <p className="mt-8 text-xs text-text-soft">
+                    اترك الحقل فارغًا للاحتفاظ بالفيديو الحالي.
                   </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-20">
+                <h2 className="text-lg font-bold text-text">إعدادات PDF</h2>
+
+                {currentLesson.pdf_file_path && existingPdfUrl && (
+                  <div className="mt-20">
+                    <p className="mb-12 text-sm font-semibold text-primary">
+                      ملف PDF المرفوع حاليًا
+                    </p>
+                    <iframe
+                      src={existingPdfUrl}
+                      title="PDF Preview"
+                      className="h-[600px] w-full rounded-xl border border-border bg-white"
+                    />
+                    <div className="mt-12 flex flex-wrap gap-12">
+                      <a
+                        href={existingPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-44 items-center justify-center rounded-medium bg-primary px-20 text-sm font-semibold text-primary-foreground"
+                      >
+                        فتح ملف PDF
+                      </a>
+                      <span className="flex items-center text-xs text-text-soft">
+                        الملف: {currentLesson.pdf_file_path}
+                      </span>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              {/* PDF Source */}
-              <div>
-                <label
-                  htmlFor="pdf_source"
-                  className="text-sm font-semibold text-text"
-                >
-                  مصدر ملف PDF
-                </label>
+                <div className="mt-20">
+                  <label
+                    htmlFor="pdf_source"
+                    className="text-sm font-semibold text-text"
+                  >
+                    مصدر ملف PDF
+                  </label>
+                  <select
+                    id="pdf_source"
+                    name="pdf_source"
+                    defaultValue={currentLesson.pdf_source ?? "url"}
+                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
+                  >
+                    <option value="url">رابط PDF</option>
+                    <option value="upload">رفع PDF إلى المنصة</option>
+                  </select>
+                </div>
 
-                <select
-                  id="pdf_source"
-                  name="pdf_source"
-                  defaultValue={
-                    lesson.pdf_source || "url"
-                  }
-                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
-                >
-                  <option value="url">
-                    رابط PDF
-                  </option>
+                <div className="mt-20">
+                  <label
+                    htmlFor="pdf_url"
+                    className="text-sm font-semibold text-text"
+                  >
+                    رابط ملف PDF
+                  </label>
+                  <input
+                    id="pdf_url"
+                    name="pdf_url"
+                    type="url"
+                    defaultValue={currentLesson.pdf_url ?? ""}
+                    placeholder="https://example.com/file.pdf"
+                    dir="ltr"
+                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
+                  />
+                </div>
 
-                  <option value="upload">
-                    رفع PDF إلى المنصة
-                  </option>
-                </select>
-              </div>
-
-              {/* PDF URL */}
-              <div>
-                <label
-                  htmlFor="pdf_url"
-                  className="text-sm font-semibold text-text"
-                >
-                  رابط ملف PDF
-                </label>
-
-                <input
-                  id="pdf_url"
-                  name="pdf_url"
-                  type="url"
-                  defaultValue={
-                    lesson.pdf_url ?? ""
-                  }
-                  placeholder="https://example.com/file.pdf"
-                  dir="ltr"
-                  className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none transition-colors focus:border-primary"
-                />
-
-                <p className="mt-8 text-xs text-text-soft">
-                  استخدم هذا الحقل إذا اخترت مصدر PDF: رابط.
-                </p>
-              </div>
-
-              {/* PDF Upload */}
-              <div>
-                <label
-                  htmlFor="pdf_file"
-                  className="text-sm font-semibold text-text"
-                >
-                  رفع ملف PDF
-                </label>
-
-                <input
-                  id="pdf_file"
-                  name="pdf_file"
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="mt-8 block w-full rounded-medium border border-border bg-background p-12 text-sm text-text"
-                />
-
-                <p className="mt-8 text-xs text-text-soft">
-                  يمكنك رفع ملف PDF مباشرة إلى منصة الضياء.
-                  اتركه فارغًا للاحتفاظ بالملف الحالي.
-                </p>
-
-                {lesson.pdf_file_path && (
-                  <p className="mt-8 text-xs text-primary">
-                    يوجد ملف PDF مرفوع حاليًا لهذا الدرس.
+                <div className="mt-20">
+                  <label
+                    htmlFor="pdf_file"
+                    className="text-sm font-semibold text-text"
+                  >
+                    رفع ملف PDF جديد
+                  </label>
+                  <input
+                    id="pdf_file"
+                    name="pdf_file"
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="mt-8 block w-full rounded-medium border border-border bg-background p-12 text-sm text-text"
+                  />
+                  <p className="mt-8 text-xs text-text-soft">
+                    اترك الحقل فارغًا للاحتفاظ بملف PDF الحالي.
                   </p>
-                )}
+                </div>
               </div>
 
-              {/* Published */}
               <div className="flex items-center gap-12">
                 <input
                   id="is_published"
                   name="is_published"
                   type="checkbox"
-                  defaultChecked={
-                    lesson.is_published
-                  }
+                  defaultChecked={currentLesson.is_published}
                   className="h-18 w-18 accent-primary"
                 />
-
                 <label
                   htmlFor="is_published"
                   className="text-sm font-semibold text-text"
@@ -916,9 +640,7 @@ const currentLesson = lesson;
                 </label>
               </div>
 
-              {/* Buttons */}
               <div className="flex flex-wrap gap-12 pt-8">
-
                 <button
                   type="submit"
                   className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
@@ -932,12 +654,9 @@ const currentLesson = lesson;
                 >
                   إلغاء
                 </Link>
-
               </div>
-
             </Stack>
           </form>
-
         </Stack>
       </Container>
     </main>
