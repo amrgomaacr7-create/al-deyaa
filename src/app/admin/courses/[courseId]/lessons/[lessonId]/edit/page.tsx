@@ -177,30 +177,24 @@ export default async function EditLessonPage({
     const description = String(formData.get("description") ?? "").trim();
     const lessonOrder = Number(formData.get("lesson_order") ?? 1);
     const type = String(formData.get("type") ?? "video").trim();
-    const videoSource = "upload";
-    const videoUrl = "";
-    const pdfSource = "upload";
-    console.log("pdfSource =", pdfSource);
-    const pdfUrl = "";
+    const videoSource = currentLesson.video_source ?? "upload";
+    const pdfSource = currentLesson.pdf_source ?? "upload";
     const isPublished = formData.get("is_published") === "on";
 
     const videoFile = formData.get("video_file");
     const pdfFile = formData.get("pdf_file");
-    console.log("pdfFile =", pdfFile);
 
     // التحقق من صحة البيانات
- console.log("TYPE =", type);
-console.log("VIDEO SOURCE =", videoSource);
     if (!title) throw new Error("عنوان الدرس مطلوب.");
     if (!Number.isInteger(lessonOrder) || lessonOrder < 1) throw new Error("ترتيب الدرس يجب أن يكون رقمًا صحيحًا يبدأ من 1.");
     if (!["video", "pdf", "text"].includes(type)) throw new Error("نوع الدرس غير صالح.");
     if (type === "video" && !["url", "upload"].includes(videoSource)) throw new Error("مصدر الفيديو غير صالح.");
- if (
+if (
   type === "pdf" &&
   !currentLesson.pdf_file_path &&
   !isFileProvided(pdfFile)
 ) {
-  throw new Error("يجب رفع ملف PDF.");
+  throw new Error("يجب رفع ملف PDF لأول مرة.");
 }
     
     if (videoSource === "upload" && isFileProvided(videoFile) && !isAllowedVideoType(videoFile)) {
@@ -210,98 +204,100 @@ console.log("VIDEO SOURCE =", videoSource);
       throw new Error("يجب رفع ملف PDF فقط.");
     }
 
-    // المتغيرات النهائية التي سيتم حفظها
-    let finalVideoUrl = currentLesson.video_url ?? "";
-    let finalVideoSource = currentLesson.video_source ?? "url";
-    let finalVideoFilePath = currentLesson.video_file_path ?? null;
+   // المتغيرات النهائية
+let finalVideoUrl: string | null = null;
+const  finalVideoSource = "upload";
+let finalVideoFilePath: string | null = null;
 
-    let finalPdfUrl = currentLesson.pdf_url ?? "";
-    let finalPdfSource = currentLesson.pdf_source ?? "url";
-    let finalPdfFilePath = currentLesson.pdf_file_path ?? null;
+let finalPdfUrl: string | null = null;
+let finalPdfSource = "upload";
+let finalPdfFilePath: string | null = null;
 
-    // --- معالجة الفيديو ---
-    if (type === "video") {
-      if (videoSource === "upload") {
-        finalVideoSource = "upload";
+// --- معالجة الفيديو ---
+if (type === "video" && isFileProvided(videoFile)) {
+  const safeExtension = getFileExtension(videoFile.name);
 
-        if (isFileProvided(videoFile)) {
-          const safeExtension = getFileExtension(videoFile.name);
-          const videoPath = `lessons/${lessonId}/video/${crypto.randomUUID()}.${safeExtension}`;
+  const videoPath = `lessons/${lessonId}/video/${crypto.randomUUID()}.${safeExtension}`;
 
-          const { error: uploadError } = await supabaseAction.storage
-            .from(LESSON_FILES_BUCKET)
-            .upload(videoPath, videoFile, { cacheControl: "3600", upsert: false, contentType: videoFile.type });
+  const { error: uploadError } = await supabaseAction.storage
+    .from(LESSON_FILES_BUCKET)
+    .upload(videoPath, videoFile, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: videoFile.type,
+    });
 
-          if (uploadError) throw new Error(`فشل رفع الفيديو: ${uploadError.message}`);
+  if (uploadError) {
+    throw new Error(`فشل رفع الفيديو: ${uploadError.message}`);
+  }
 
-          // رفع فيديو جديد يستبدل القديم (يتم حذف القديم هنا)
-          if (currentLesson.video_file_path) {
-            await removeStorageFile(supabaseAction, currentLesson.video_file_path, "video");
-          }
+  if (currentLesson.video_file_path) {
+    await removeStorageFile(
+      supabaseAction,
+      currentLesson.video_file_path,
+      "video",
+    );
+  }
 
-          const { data } = supabaseAction.storage.from(LESSON_FILES_BUCKET).getPublicUrl(videoPath);
-          finalVideoFilePath = videoPath;
-          finalVideoUrl = data.publicUrl;
-        }
-      }
-    } else {
-      // تنظيف الفيديو إذا تغير نوع الدرس (الخطوة 4 التي طلبتها)
-      finalVideoUrl = "";
-      finalVideoSource = "url";
+  const { data } = supabaseAction.storage
+    .from(LESSON_FILES_BUCKET)
+    .getPublicUrl(videoPath);
 
-      if (currentLesson.video_file_path) {
-        await removeStorageFile(
-          supabaseAction, // استخدام supabaseAction هنا وليس supabase
-          currentLesson.video_file_path,
-          "video",
-        );
-      }
+  finalVideoUrl = data.publicUrl;
+  finalVideoFilePath = videoPath;
+}
 
-      finalVideoFilePath = null;
+// --- معالجة الـ PDF ---
+if (type === "pdf") {
+  if (isFileProvided(pdfFile)) {
+    const safeExtension = getFileExtension(pdfFile.name);
+
+    const pdfPath = `lessons/${lessonId}/pdf/${crypto.randomUUID()}.${safeExtension}`;
+
+    const { error: uploadError } = await supabaseAction.storage
+      .from(LESSON_FILES_BUCKET)
+      .upload(pdfPath, pdfFile, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "application/pdf",
+      });
+
+    if (uploadError) {
+      throw new Error(`فشل رفع ملف PDF: ${uploadError.message}`);
     }
 
-    // --- معالجة الـ PDF ---
-   console.log("TYPE =", type);
-console.log("PDF SOURCE =", pdfSource);
-    if (type === "pdf") {
-      if (pdfSource === "upload") {
-        finalPdfSource = "upload";
-
-        if (isFileProvided(pdfFile)) {
-          const safeExtension = getFileExtension(pdfFile.name);
-          const pdfPath = `lessons/${lessonId}/pdf/${crypto.randomUUID()}.${safeExtension}`;
-
-          const { error: uploadError } = await supabaseAction.storage
-            .from(LESSON_FILES_BUCKET)
-            .upload(pdfPath, pdfFile, { cacheControl: "3600", upsert: false, contentType: "application/pdf" });
-
-          if (uploadError) throw new Error(`فشل رفع ملف PDF: ${uploadError.message}`);
-
-          // رفع PDF جديد يستبدل القديم (يتم حذف القديم هنا)
-          if (currentLesson.pdf_file_path) {
-            await removeStorageFile(supabaseAction, currentLesson.pdf_file_path, "PDF");
-          }
-
-          const { data } = supabaseAction.storage.from(LESSON_FILES_BUCKET).getPublicUrl(pdfPath);
-          finalPdfFilePath = pdfPath;
-          finalPdfUrl = data.publicUrl;
-        }
-      }
-    } else {
-      // تنظيف PDF إذا تغير نوع الدرس (الخطوة 5 التي طلبتها)
-      finalPdfUrl = "";
-      finalPdfSource = "url";
-
-      if (currentLesson.pdf_file_path) {
-        await removeStorageFile(
-          supabaseAction, // استخدام supabaseAction هنا وليس supabase
-          currentLesson.pdf_file_path,
-          "PDF",
-        );
-      }
-
-      finalPdfFilePath = null;
+    if (currentLesson.pdf_file_path) {
+      await removeStorageFile(
+        supabaseAction,
+        currentLesson.pdf_file_path,
+        "PDF",
+      );
     }
+
+    const { data } = supabaseAction.storage
+      .from(LESSON_FILES_BUCKET)
+      .getPublicUrl(pdfPath);
+
+    finalPdfUrl = data.publicUrl;
+    finalPdfFilePath = pdfPath;
+  } else {
+    finalPdfUrl = currentLesson.pdf_url;
+    finalPdfFilePath = currentLesson.pdf_file_path;
+    finalPdfSource = currentLesson.pdf_source ?? "upload";
+  }
+} else {
+  if (currentLesson.pdf_file_path) {
+    await removeStorageFile(
+      supabaseAction,
+      currentLesson.pdf_file_path,
+      "PDF",
+    );
+  }
+
+  finalPdfUrl = null;
+  finalPdfSource = "upload";
+  finalPdfFilePath = null;
+}
 
     // تحديث قاعدة البيانات
     const { error: updateError } = await supabaseAction
@@ -311,12 +307,13 @@ console.log("PDF SOURCE =", pdfSource);
         description: description || null,
         lesson_order: lessonOrder,
         type,
-        video_url: finalVideoUrl || null,
-        video_source: finalVideoSource,
-        video_file_path: finalVideoFilePath,
-        pdf_source: finalPdfSource,
-        pdf_url: finalPdfUrl || null,
-        pdf_file_path: finalPdfFilePath,
+       video_url: finalVideoUrl,
+       video_source: finalVideoSource,
+       video_file_path: finalVideoFilePath,
+
+       pdf_url: finalPdfUrl,
+       pdf_source: finalPdfSource,
+       pdf_file_path: finalPdfFilePath,
         is_published: isPublished,
       })
       .eq("id", lessonId)
