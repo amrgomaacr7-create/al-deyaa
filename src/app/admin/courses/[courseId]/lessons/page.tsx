@@ -56,10 +56,19 @@ export default async function AdminLessonsPage({
   }
 
   const { data: lessons, error: lessonsError } = await supabase
-    .from("lessons")
-    .select(
-      "id, course_id, title, description, lesson_order, type, video_url, is_published",
-    )
+  .from("lessons")
+  .select(`
+    id,
+    course_id,
+    title,
+    description,
+    lesson_order,
+    type,
+    video_url,
+    pdf_url,
+    pdf_file_path,
+    is_published
+  `)
     .eq("course_id", courseId)
     .order("lesson_order", { ascending: true });
 
@@ -267,12 +276,17 @@ export default async function AdminLessonsPage({
                               النوع: {lesson.type || "غير محدد"}
                             </span>
 
-                            <span>
-                              الفيديو:{" "}
-                              {lesson.video_url
-                                ? "متاح"
-                                : "غير متاح"}
-                            </span>
+                            {lesson.type === "video" && (
+                          <span>
+                            الفيديو: {lesson.video_url ? "متاح" : "غير متاح"}
+                          </span>
+                        )}
+
+                        {lesson.type === "pdf" && (
+                          <span>
+                            PDF: {lesson.pdf_file_path ? "متاح" : "غير متاح"}
+                          </span>
+                        )}
                           </div>
                         </div>
                       </div>

@@ -91,30 +91,18 @@ export default async function LessonPage({
             </p>
           </div>
 
-          {lesson.video_url ? (
-            <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-floating">
-              <video
-                className="aspect-video w-full"
-                controls
-                preload="metadata"
-                src={lesson.video_url}
-              >
-                المتصفح الخاص بك لا يدعم تشغيل الفيديو.
-              </video>
-            </div>
-          ) : (
-            <div className="flex aspect-video items-center justify-center rounded-2xl border border-border bg-surface-raised">
-              <div className="text-center">
-                <p className="text-xl font-bold text-text">
-                  الفيديو غير متاح حاليًا
-                </p>
-
-                <p className="mt-8 text-sm text-text-soft">
-                  سيتم إضافة فيديو هذا الدرس قريبًا.
-                </p>
-              </div>
-            </div>
-          )}
+          {lesson.video_url && (
+  <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-floating">
+    <video
+      className="aspect-video w-full"
+      controls
+      preload="metadata"
+      src={lesson.video_url}
+    >
+      المتصفح الخاص بك لا يدعم تشغيل الفيديو.
+    </video>
+  </div>
+)}
 
           <LessonCompleteButton lessonId={lesson.id} />
 
@@ -130,10 +118,48 @@ export default async function LessonPage({
             </div>
 
             <div className="mt-24">
-              <p className="text-sm text-text-soft">
-                لا توجد ملفات مرفقة بهذا الدرس حاليًا.
-              </p>
-            </div>
+  {lesson.video_url || lesson.pdf_url ? (
+    <div className="flex flex-wrap gap-12">
+
+      {lesson.video_url && (
+        <a
+          href={lesson.video_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-48 items-center justify-center rounded-medium border border-border px-24 text-sm font-semibold text-text"
+        >
+          🎥 فتح الفيديو
+        </a>
+      )}
+
+      {lesson.pdf_url && (
+        <>
+          <a
+            href={lesson.pdf_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground"
+          >
+            📄 فتح PDF
+          </a>
+
+          <a
+            href={lesson.pdf_url}
+            download
+            className="inline-flex h-48 items-center justify-center rounded-medium border border-border px-24 text-sm font-semibold text-text"
+          >
+            تحميل PDF
+          </a>
+        </>
+      )}
+
+    </div>
+  ) : (
+    <p className="text-sm text-text-soft">
+      لا توجد ملفات مرفقة بهذا الدرس حاليًا.
+    </p>
+  )}
+</div>
           </section>
 
           <section className="rounded-2xl border border-border bg-surface p-24">
