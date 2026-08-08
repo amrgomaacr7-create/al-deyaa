@@ -43,10 +43,13 @@ export default async function LessonPage({
 
   if (!course || !lesson) {
     return (
-      <main className="min-h-screen bg-background py-64">
+      <main
+        dir="rtl"
+        className="min-h-screen bg-background py-64"
+      >
         <Container size="desktop">
           <Stack gap={24}>
-            <h1 className="text-4xl font-bold text-text">
+            <h1 className="text-3xl font-bold text-text">
               الدرس غير موجود
             </h1>
 
@@ -67,7 +70,10 @@ export default async function LessonPage({
   }
 
   return (
-    <main className="min-h-screen bg-background py-64">
+    <main
+      dir="rtl"
+      className="min-h-screen bg-background py-64"
+    >
       <Container size="desktop">
         <Stack gap={32}>
           <Link
@@ -79,88 +85,113 @@ export default async function LessonPage({
 
           <div>
             <p className="text-sm font-semibold text-primary">
-              الدرس {lesson.order_number}
+              الدرس {lesson.lesson_order ?? lesson.order_number}
             </p>
 
             <h1 className="mt-12 text-4xl font-bold text-text">
               {lesson.title}
             </h1>
 
-            <p className="mt-16 max-w-[720px] text-lg leading-8 text-text-soft">
-              {lesson.description}
-            </p>
+            {lesson.description && (
+              <p className="mt-16 max-w-[720px] text-lg leading-8 text-text-soft">
+                {lesson.description}
+              </p>
+            )}
           </div>
 
-          {lesson.video_url && (
-  <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-floating">
-    <video
-      className="aspect-video w-full"
-      controls
-      preload="metadata"
-      src={lesson.video_url}
-    >
-      المتصفح الخاص بك لا يدعم تشغيل الفيديو.
-    </video>
-  </div>
-)}
-
-          <LessonCompleteButton lessonId={lesson.id} />
+          {/* =========================
+              محتوى الدرس
+          ========================= */}
 
           <section className="rounded-2xl border border-border bg-surface p-24">
             <div>
-              <p className="font-semibold text-text">
-                ملفات الدرس
+              <p className="text-lg font-bold text-text">
+                محتوى الدرس
               </p>
 
               <p className="mt-8 text-sm text-text-soft">
-                يمكنك تحميل أو عرض الملفات المرفقة بهذا الدرس.
+                شاهد الفيديو وراجع ملف PDF الخاص بالدرس من نفس الصفحة.
               </p>
             </div>
 
             <div className="mt-24">
-  {lesson.video_url || lesson.pdf_url ? (
-    <div className="flex flex-wrap gap-12">
+              {lesson.video_url ? (
+                <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-floating">
+                  <video
+                    className="aspect-video w-full"
+                    controls
+                    preload="metadata"
+                    src={lesson.video_url}
+                  >
+                    المتصفح الخاص بك لا يدعم تشغيل الفيديو.
+                  </video>
+                </div>
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-2xl border border-border bg-surface-raised">
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-text">
+                      الفيديو غير متاح حاليًا
+                    </p>
 
-      {lesson.video_url && (
-        <a
-          href={lesson.video_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-48 items-center justify-center rounded-medium border border-border px-24 text-sm font-semibold text-text"
-        >
-          🎥 فتح الفيديو
-        </a>
-      )}
+                    <p className="mt-8 text-sm text-text-soft">
+                      سيتم إضافة فيديو هذا الدرس قريبًا.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
 
-      {lesson.pdf_url && (
-        <>
-          <a
-            href={lesson.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground"
-          >
-            📄 فتح PDF
-          </a>
+            {/* =========================
+                PDF
+            ========================= */}
 
-          <a
-            href={lesson.pdf_url}
-            download
-            className="inline-flex h-48 items-center justify-center rounded-medium border border-border px-24 text-sm font-semibold text-text"
-          >
-            تحميل PDF
-          </a>
-        </>
-      )}
+            {lesson.pdf_url && (
+              <div className="mt-32">
+                <div className="mb-16">
+                  <p className="text-lg font-bold text-text">
+                    ملف الدرس PDF
+                  </p>
 
-    </div>
-  ) : (
-    <p className="text-sm text-text-soft">
-      لا توجد ملفات مرفقة بهذا الدرس حاليًا.
-    </p>
-  )}
-</div>
+                  <p className="mt-8 text-sm text-text-soft">
+                    يمكنك مراجعة الملف مباشرة من هنا أو تحميله.
+                  </p>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-border bg-white">
+                  <iframe
+                    src={lesson.pdf_url}
+                    title={`PDF - ${lesson.title}`}
+                    className="h-[700px] w-full"
+                  />
+                </div>
+
+                <div className="mt-16 flex flex-wrap gap-12">
+                  <a
+                    href={lesson.pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-48 items-center justify-center rounded-medium bg-primary px-24 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+                  >
+                    📄 فتح PDF
+                  </a>
+
+                  <a
+                    href={lesson.pdf_url}
+                    download
+                    className="inline-flex h-48 items-center justify-center rounded-medium border border-border px-24 text-sm font-semibold text-text transition-colors hover:bg-background"
+                  >
+                    تحميل PDF
+                  </a>
+                </div>
+              </div>
+            )}
           </section>
+
+          <LessonCompleteButton lessonId={lesson.id} />
+
+          {/* =========================
+              الواجب
+          ========================= */}
 
           <section className="rounded-2xl border border-border bg-surface p-24">
             <p className="font-semibold text-text">
@@ -172,13 +203,18 @@ export default async function LessonPage({
             </p>
           </section>
 
+          {/* =========================
+              عن الدرس
+          ========================= */}
+
           <section className="rounded-2xl border border-border bg-surface p-24">
             <p className="font-semibold text-text">
               عن هذا الدرس
             </p>
 
             <p className="mt-8 leading-8 text-text-soft">
-              {lesson.description}
+              {lesson.description ||
+                "لا يوجد وصف إضافي لهذا الدرس حاليًا."}
             </p>
           </section>
         </Stack>

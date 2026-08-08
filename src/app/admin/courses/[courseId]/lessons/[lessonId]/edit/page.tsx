@@ -176,7 +176,7 @@ export default async function EditLessonPage({
     const title = String(formData.get("title") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const lessonOrder = Number(formData.get("lesson_order") ?? 1);
-    const type = String(formData.get("type") ?? "video").trim();
+    const type = currentLesson.type ?? "video";
     const videoSource = currentLesson.video_source ?? "upload";
     const pdfSource = currentLesson.pdf_source ?? "upload";
     const isPublished = formData.get("is_published") === "on";
@@ -214,7 +214,7 @@ let finalPdfSource = "upload";
 let finalPdfFilePath: string | null = null;
 
 // --- معالجة الفيديو ---
-if (type === "video" && isFileProvided(videoFile)) {
+if (isFileProvided(videoFile)) {
   const safeExtension = getFileExtension(videoFile.name);
 
   const videoPath = `lessons/${lessonId}/video/${crypto.randomUUID()}.${safeExtension}`;
@@ -248,44 +248,23 @@ if (type === "video" && isFileProvided(videoFile)) {
 }
 
 // --- معالجة الـ PDF ---
-if (type === "pdf") {
-  if (isFileProvided(pdfFile)) {
-    const safeExtension = getFileExtension(pdfFile.name);
+if (isFileProvided(pdfFile)) {
+  const safeExtension = getFileExtension(pdfFile.name);
 
-    const pdfPath = `lessons/${lessonId}/pdf/${crypto.randomUUID()}.${safeExtension}`;
+  const pdfPath = `lessons/${lessonId}/pdf/${crypto.randomUUID()}.${safeExtension}`;
 
-    const { error: uploadError } = await supabaseAction.storage
-      .from(LESSON_FILES_BUCKET)
-      .upload(pdfPath, pdfFile, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: "application/pdf",
-      });
+  const { error: uploadError } = await supabaseAction.storage
+    .from(LESSON_FILES_BUCKET)
+    .upload(pdfPath, pdfFile, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: "application/pdf",
+    });
 
-    if (uploadError) {
-      throw new Error(`فشل رفع ملف PDF: ${uploadError.message}`);
-    }
-
-    if (currentLesson.pdf_file_path) {
-      await removeStorageFile(
-        supabaseAction,
-        currentLesson.pdf_file_path,
-        "PDF",
-      );
-    }
-
-    const { data } = supabaseAction.storage
-      .from(LESSON_FILES_BUCKET)
-      .getPublicUrl(pdfPath);
-
-    finalPdfUrl = data.publicUrl;
-    finalPdfFilePath = pdfPath;
-  } else {
-    finalPdfUrl = currentLesson.pdf_url;
-    finalPdfFilePath = currentLesson.pdf_file_path;
-    finalPdfSource = currentLesson.pdf_source ?? "upload";
+  if (uploadError) {
+    throw new Error(`فشل رفع ملف PDF: ${uploadError.message}`);
   }
-} else {
+
   if (currentLesson.pdf_file_path) {
     await removeStorageFile(
       supabaseAction,
@@ -294,11 +273,19 @@ if (type === "pdf") {
     );
   }
 
-  finalPdfUrl = null;
-  finalPdfSource = "upload";
-  finalPdfFilePath = null;
-}
+  const { data } = supabaseAction.storage
+    .from(LESSON_FILES_BUCKET)
+    .getPublicUrl(pdfPath);
 
+  finalPdfUrl = data.publicUrl;
+  finalPdfFilePath = pdfPath;
+  finalPdfSource = "upload";
+} else {
+  // لا يوجد PDF جديد، احتفظ بالقديم
+  finalPdfUrl = currentLesson.pdf_url;
+  finalPdfFilePath = currentLesson.pdf_file_path;
+  finalPdfSource = currentLesson.pdf_source ?? "upload";
+}
     // تحديث قاعدة البيانات
     const { error: updateError } = await supabaseAction
       .from("lessons")
@@ -407,25 +394,6 @@ if (type === "pdf") {
                     defaultValue={currentLesson.lesson_order}
                     className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
                   />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="type"
-                    className="text-sm font-semibold text-text"
-                  >
-                    نوع الدرس
-                  </label>
-                  <select
-                    id="type"   
-                    name="type"
-                    defaultValue={currentLesson.type ?? "video"}
-                    className="mt-8 h-48 w-full rounded-medium border border-border bg-background px-16 text-sm text-text outline-none focus:border-primary"
-                  >
-                    <option value="video">فيديو</option>
-                    <option value="pdf">PDF</option>
-                    <option value="text">نص</option>
-                  </select>
                 </div>
               </div>
 
